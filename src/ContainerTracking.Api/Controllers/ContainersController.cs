@@ -5,6 +5,7 @@ using ContainerTracking.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ContainerTracking.Api.Controllers;
 
@@ -218,6 +219,22 @@ public class ContainersController : ControllerBase
         });
     }
 
+    /// <summary>POST /api/v1/containers/{id}/poll — immediately poll all providers for latest events</summary>
+    [HttpPost("{id:guid}/poll")]
+    [Authorize(Policy = "RequireLogisticsManager")]
+    public async Task<IActionResult> PollContainer(
+        Guid id,
+        [FromServices] IContainerPollingService pollService,
+        CancellationToken ct = default)
+    {
+        var orgId = RequireOrgId();
+        var exists = await _db.Containers.AnyAsync(c => c.Id == id && c.OrganizationId == orgId && !c.IsDeleted, ct);
+        if (!exists) return NotFound();
+
+        var newEvents = await pollService.PollContainerNowAsync(id, orgId, ct);
+        return Ok(new { newEvents, message = $"Poll complete. {newEvents} new event(s) found." });
+    }
+
     [HttpPost("{id:guid}/events")]
     [Authorize(Policy = "RequireLogisticsManager")]
     public async Task<IActionResult> AddManualEvent(Guid id, [FromBody] ManualEventRequest req, CancellationToken ct = default)
@@ -229,6 +246,7 @@ public class ContainersController : ControllerBase
         if (!Enum.TryParse<Core.Enums.TrackingEventType>(req.EventType, out var eventType))
             return BadRequest(new { error = "Invalid eventType value." });
 
+        var newStatus = MapEventTypeToStatus(eventType);
         var evt = new TrackingEvent
         {
             Id = Guid.NewGuid(),
@@ -241,12 +259,18 @@ public class ContainersController : ControllerBase
             EventTime = req.EventTime ?? DateTime.UtcNow,
             ReceivedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ContainerStatusAfter = newStatus
         };
         _db.TrackingEvents.Add(evt);
         container.LastEventAt = evt.EventTime;
+        if (newStatus.HasValue)
+        {
+            container.Status = newStatus.Value;
+            if (req.Location != null) container.CurrentLocation = req.Location;
+        }
         await _db.SaveChangesAsync(ct);
-        return Created($"/api/v1/tracking-events/{evt.Id}", new { evt.Id });
+        return Created($"/api/v1/tracking-events/{evt.Id}", new { evt.Id, newStatus = newStatus?.ToString() });
     }
 
     private Guid RequireOrgId()
@@ -269,6 +293,22 @@ public class ContainersController : ControllerBase
         if (field == "containers") counter.ActiveContainers = Math.Max(0, counter.ActiveContainers + delta);
         await _db.SaveChangesAsync(ct);
     }
+
+    private static ContainerStatus? MapEventTypeToStatus(TrackingEventType type) => type switch
+    {
+        TrackingEventType.ContainerGateIn => ContainerStatus.GateIn,
+        TrackingEventType.ContainerLoaded => ContainerStatus.Loaded,
+        TrackingEventType.VesselDeparted => ContainerStatus.Departed,
+        TrackingEventType.VesselArrived => ContainerStatus.Arrived,
+        TrackingEventType.ContainerDischarged => ContainerStatus.Discharged,
+        TrackingEventType.ContainerGateOut => ContainerStatus.GateOut,
+        TrackingEventType.ContainerDelivered => ContainerStatus.Delivered,
+        TrackingEventType.TransshipmentArrived => ContainerStatus.TransshipmentArrived,
+        TrackingEventType.TransshipmentDeparted => ContainerStatus.TransshipmentDeparted,
+        TrackingEventType.BookingConfirmed => ContainerStatus.BookingConfirmed,
+        TrackingEventType.EmptyReturned => ContainerStatus.Empty,
+        _ => null
+    };
 
     private static string GenerateToken()
     {

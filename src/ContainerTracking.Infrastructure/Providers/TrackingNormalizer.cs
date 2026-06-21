@@ -71,11 +71,14 @@ public class TrackingNormalizer : ITrackingNormalizer
         using var doc = System.Text.Json.JsonDocument.Parse(raw.RawJson);
         var root = doc.RootElement;
 
+        var eventType = MapCarrierEventType(root.TryGetProperty("eventCode", out var ec) ? ec.GetString() : null);
+
         return new NormalizedTrackingEvent
         {
             ProviderCode = raw.SourceProvider,
             ProviderType = TrackingProviderType.Carrier,
-            EventType = MapCarrierEventType(root.TryGetProperty("eventCode", out var ec) ? ec.GetString() : null),
+            EventType = eventType,
+            StatusAfter = MapEventTypeToStatus(eventType),
             EventTime = root.TryGetProperty("eventTime", out var et) ? DateTime.Parse(et.GetString()!) : raw.ReceivedAt,
             Description = root.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "",
             Location = root.TryGetProperty("locationName", out var ln) ? ln.GetString() : null,
@@ -162,5 +165,21 @@ public class TrackingNormalizer : ITrackingNormalizer
         "TRANSSHIP" or "TS" => TrackingEventType.TransshipmentArrived,
         "ETA" => TrackingEventType.EtaUpdated,
         _ => TrackingEventType.PortCallEvent
+    };
+
+    internal static ContainerStatus? MapEventTypeToStatus(TrackingEventType eventType) => eventType switch
+    {
+        TrackingEventType.ContainerGateIn => ContainerStatus.GateIn,
+        TrackingEventType.ContainerLoaded => ContainerStatus.Loaded,
+        TrackingEventType.VesselDeparted => ContainerStatus.Departed,
+        TrackingEventType.VesselArrived => ContainerStatus.Arrived,
+        TrackingEventType.ContainerDischarged => ContainerStatus.Discharged,
+        TrackingEventType.ContainerGateOut => ContainerStatus.GateOut,
+        TrackingEventType.ContainerDelivered => ContainerStatus.Delivered,
+        TrackingEventType.TransshipmentArrived => ContainerStatus.TransshipmentArrived,
+        TrackingEventType.TransshipmentDeparted => ContainerStatus.TransshipmentDeparted,
+        TrackingEventType.BookingConfirmed => ContainerStatus.BookingConfirmed,
+        TrackingEventType.EmptyReturned => ContainerStatus.Empty,
+        _ => null
     };
 }

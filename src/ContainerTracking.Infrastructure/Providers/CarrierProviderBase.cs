@@ -3,6 +3,8 @@ using ContainerTracking.Core.Interfaces;
 using ContainerTracking.Core.Models;
 using Microsoft.Extensions.Logging;
 
+using ContainerStatus = ContainerTracking.Core.Enums.ContainerStatus;
+
 namespace ContainerTracking.Infrastructure.Providers;
 
 /// <summary>
@@ -121,7 +123,6 @@ public class MaerskCarrierProvider : CarrierProviderBase
 
     private IEnumerable<NormalizedTrackingEvent> NormalizeMaerskResponse(string json, string containerNumber)
     {
-        // Parse Maersk-specific JSON format and normalize
         var events = new List<NormalizedTrackingEvent>();
         try
         {
@@ -135,13 +136,15 @@ public class MaerskCarrierProvider : CarrierProviderBase
                 if (!container.TryGetProperty("events", out var evts)) continue;
                 foreach (var evt in evts.EnumerateArray())
                 {
+                    var eventType = MapEventTypeCode(
+                        evt.TryGetProperty("eventTypeCode", out var tc) ? tc.GetString() : "");
                     events.Add(new NormalizedTrackingEvent
                     {
                         ProviderCode = ProviderCode,
                         ProviderType = ProviderType,
                         ContainerNumber = containerNumber,
-                        EventType = MapEventTypeCode(
-                            evt.TryGetProperty("eventTypeCode", out var tc) ? tc.GetString() : ""),
+                        EventType = eventType,
+                        StatusAfter = MapEventTypeToStatus(eventType),
                         Description = evt.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "",
                         EventTime = evt.TryGetProperty("eventDateTime", out var dt)
                             ? DateTime.Parse(dt.GetString()!) : DateTime.UtcNow,
@@ -162,7 +165,7 @@ public class MaerskCarrierProvider : CarrierProviderBase
         return events;
     }
 
-    private TrackingEventType MapEventTypeCode(string? code) => code switch
+    private static TrackingEventType MapEventTypeCode(string? code) => code switch
     {
         "GATE-IN" => TrackingEventType.ContainerGateIn,
         "LOAD" => TrackingEventType.ContainerLoaded,
@@ -172,6 +175,19 @@ public class MaerskCarrierProvider : CarrierProviderBase
         "GATE-OUT" => TrackingEventType.ContainerGateOut,
         "DELIVER" => TrackingEventType.ContainerDelivered,
         _ => TrackingEventType.PortCallEvent
+    };
+
+    private static ContainerStatus? MapEventTypeToStatus(TrackingEventType eventType) => eventType switch
+    {
+        TrackingEventType.ContainerGateIn => ContainerStatus.GateIn,
+        TrackingEventType.ContainerLoaded => ContainerStatus.Loaded,
+        TrackingEventType.VesselDeparted => ContainerStatus.Departed,
+        TrackingEventType.VesselArrived => ContainerStatus.Arrived,
+        TrackingEventType.ContainerDischarged => ContainerStatus.Discharged,
+        TrackingEventType.ContainerGateOut => ContainerStatus.GateOut,
+        TrackingEventType.ContainerDelivered => ContainerStatus.Delivered,
+        TrackingEventType.TransshipmentArrived => ContainerStatus.TransshipmentArrived,
+        _ => null
     };
 }
 
@@ -220,11 +236,11 @@ public class GenericCarrierProvider : CarrierProviderBase
     }
 }
 
-public class MscCarrierProvider(IHttpClientFactory http, ILogger<MscCarrierProvider> logger)
-    : GenericCarrierProvider(http, logger, "msc", "MSC", "MSCU", "https://www.msc.com/api/tracking") { }
+public class MscCarrierProvider(HttpClient http, ILogger<GenericCarrierProvider> logger)
+    : GenericCarrierProvider("MSC", "MSC Mediterranean Shipping", "MSCU", "https://www.msc.com/api/tracking", http, logger) { }
 
-public class CmaCgmCarrierProvider(IHttpClientFactory http, ILogger<CmaCgmCarrierProvider> logger)
-    : GenericCarrierProvider(http, logger, "cmacgm", "CMA CGM", "CMAU", "https://apis.cma-cgm.net") { }
+public class CmaCgmCarrierProvider(HttpClient http, ILogger<GenericCarrierProvider> logger)
+    : GenericCarrierProvider("CMACGM", "CMA CGM", "CMAU", "https://apis.cma-cgm.net", http, logger) { }
 
-public class HapagLloydCarrierProvider(IHttpClientFactory http, ILogger<HapagLloydCarrierProvider> logger)
-    : GenericCarrierProvider(http, logger, "hapag", "Hapag-Lloyd", "HLCU", "https://api.hapag-lloyd.com") { }
+public class HapagLloydCarrierProvider(HttpClient http, ILogger<GenericCarrierProvider> logger)
+    : GenericCarrierProvider("HAPAG", "Hapag-Lloyd", "HLCU", "https://api.hapag-lloyd.com", http, logger) { }

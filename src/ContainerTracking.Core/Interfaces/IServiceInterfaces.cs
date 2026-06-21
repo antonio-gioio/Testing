@@ -62,3 +62,13 @@ public interface ICurrentOrganizationContext
     string? Role { get; }
     bool IsPlatformAdmin { get; }
 }
+
+public interface IContainerPollingService
+{
+    /// <summary>
+    /// Polls all configured tracking providers for a single container immediately,
+    /// stores any new events, and publishes real-time updates.
+    /// Returns the count of new events persisted.
+    /// </summary>
+    Task<int> PollContainerNowAsync(Guid containerId, Guid organizationId, CancellationToken ct = default);
+}

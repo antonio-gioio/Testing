@@ -129,6 +129,7 @@ builder.Services.AddHostedService<VesselPositionWorker>();
 builder.Services.AddScoped<AlertProcessingService>();
 builder.Services.AddScoped<IManualTrackingProvider, ManualTrackingProvider>();
 builder.Services.AddScoped<IPortMilestoneProvider, PortMilestoneProvider>();
+builder.Services.AddScoped<IContainerPollingService, ContainerPollingService>();
 
 // ─── Redis Cache ───────────────────────────────────────────────────────────
 if (!string.IsNullOrEmpty(redisConn))

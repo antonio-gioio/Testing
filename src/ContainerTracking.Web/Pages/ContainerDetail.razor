@@ -53,6 +53,15 @@
                             </div>
                         }
                     </div>
+                    <div style="margin-top:1rem">
+                        <button class="ct-btn" @onclick="RefreshTracking" disabled="@_polling">
+                            @if (_polling) { <span>Polling…</span> } else { <span>↻ Refresh Tracking</span> }
+                        </button>
+                        @if (_pollMessage != null)
+                        {
+                            <span style="margin-left:0.75rem;font-size:0.85rem;color:var(--ct-text-muted)">@_pollMessage</span>
+                        }
+                    </div>
                 </section>
 
                 @if (_showAddEvent)
@@ -64,12 +73,17 @@
                                 <label>Event Type</label>
                                 <select class="ct-input" @bind="_eventForm.EventType">
                                     <option value="ManualUpdate">Manual Update</option>
-                                    <option value="Loaded">Loaded</option>
-                                    <option value="Discharged">Discharged</option>
-                                    <option value="GateIn">Gate In</option>
-                                    <option value="GateOut">Gate Out</option>
+                                    <option value="ContainerGateIn">Gate In</option>
+                                    <option value="ContainerLoaded">Loaded on Vessel</option>
+                                    <option value="VesselDeparted">Vessel Departed</option>
+                                    <option value="VesselArrived">Vessel Arrived</option>
+                                    <option value="ContainerDischarged">Discharged</option>
+                                    <option value="ContainerGateOut">Gate Out</option>
                                     <option value="CustomsCleared">Customs Cleared</option>
-                                    <option value="Delivered">Delivered</option>
+                                    <option value="ContainerDelivered">Delivered</option>
+                                    <option value="DelayNotification">Delay Notification</option>
+                                    <option value="HoldPlaced">Hold Placed</option>
+                                    <option value="HoldReleased">Hold Released</option>
                                 </select>
                             </div>
                             <div class="ct-form-group">
@@ -95,17 +109,30 @@
                         <div class="ct-event-timeline">
                             @foreach (var e in _events)
                             {
-                                <div class="ct-event-item">
-                                    <div class="ct-event-dot"></div>
+                                var isDischarge = e.EventType is "ContainerDischarged";
+                                var isDelivered = e.EventType is "ContainerDelivered";
+                                var isAlert = e.EventType is "DelayNotification" or "HoldPlaced";
+                                <div class="ct-event-item @(isDischarge ? "ct-event-discharge" : isDelivered ? "ct-event-delivered" : isAlert ? "ct-event-alert" : "")">
+                                    <div class="ct-event-dot @(isDischarge ? "ct-dot-discharge" : isDelivered ? "ct-dot-delivered" : isAlert ? "ct-dot-alert" : "")"></div>
                                     <div class="ct-event-body">
                                         <div class="ct-event-header">
-                                            <span class="ct-font-bold">@e.EventType</span>
+                                            <span class="ct-font-bold">
+                                                @EventTypeLabel(e.EventType)
+                                                @if (isDischarge)
+                                                {
+                                                    <span class="ct-badge ct-badge-discharged" style="margin-left:0.5rem;font-size:0.7rem">DISCHARGED</span>
+                                                }
+                                                else if (isDelivered)
+                                                {
+                                                    <span class="ct-badge ct-badge-delivered" style="margin-left:0.5rem;font-size:0.7rem">DELIVERED</span>
+                                                }
+                                            </span>
                                             <span class="ct-text-muted" style="font-size:0.75rem">@e.ProviderType</span>
                                         </div>
                                         <div class="ct-event-desc">@e.Description</div>
                                         <div class="ct-event-meta">
                                             <span>@e.Location</span>
-                                            <span class="ct-text-muted">@e.OccurredAt.ToString("dd MMM yyyy HH:mm")</span>
+                                            <span class="ct-text-muted">@e.EventTime.ToString("dd MMM yyyy HH:mm")</span>
                                         </div>
                                     </div>
                                 </div>
@@ -139,12 +166,21 @@
     private List<EventItem>? _events;
     private bool _loading = true;
     private bool _showAddEvent;
+    private bool _polling;
+    private string? _pollMessage;
     private readonly ManualEventForm _eventForm = new();
 
     protected override async Task OnInitializedAsync()
     {
         await Task.WhenAll(LoadContainer(), LoadEvents());
-        Hub.ContainerUpdated += async msg => { await LoadContainer(); await InvokeAsync(StateHasChanged); };
+        Hub.ContainerUpdated += async msg =>
+        {
+            if (msg.ContainerId == Id)
+            {
+                await Task.WhenAll(LoadContainer(), LoadEvents());
+                await InvokeAsync(StateHasChanged);
+            }
+        };
     }
 
     private async Task LoadContainer()
@@ -156,6 +192,32 @@
     private async Task LoadEvents()
     {
         _events = await Api.GetAsync<List<EventItem>>($"api/v1/containers/{Id}/events");
+    }
+
+    private async Task RefreshTracking()
+    {
+        _polling = true;
+        _pollMessage = null;
+        StateHasChanged();
+        try
+        {
+            var res = await Api.PostAsync($"api/v1/containers/{Id}/poll", new { });
+            if (res.IsSuccessStatusCode)
+            {
+                var body = await res.Content.ReadFromJsonAsync<PollResult>();
+                _pollMessage = body?.Message ?? "Poll complete.";
+                await Task.WhenAll(LoadContainer(), LoadEvents());
+            }
+            else
+            {
+                _pollMessage = "Poll failed.";
+            }
+        }
+        catch
+        {
+            _pollMessage = "Poll failed — check connection.";
+        }
+        _polling = false;
     }
 
     private async Task AddEvent()
@@ -171,9 +233,30 @@
             _showAddEvent = false;
             _eventForm.Description = "";
             _eventForm.Location = "";
-            await LoadEvents();
+            await Task.WhenAll(LoadContainer(), LoadEvents());
         }
     }
+
+    private static string EventTypeLabel(string code) => code switch
+    {
+        "ContainerGateIn" => "Gate In",
+        "ContainerLoaded" => "Loaded on Vessel",
+        "VesselDeparted" => "Vessel Departed",
+        "TransshipmentArrived" => "Transshipment Arrived",
+        "TransshipmentDeparted" => "Transshipment Departed",
+        "VesselArrived" => "Vessel Arrived at Port",
+        "ContainerDischarged" => "Container Discharged",
+        "ContainerGateOut" => "Gate Out",
+        "ContainerDelivered" => "Delivered",
+        "AisPositionUpdate" => "AIS Position Update",
+        "EtaUpdated" => "ETA Updated",
+        "DelayNotification" => "Delay Detected",
+        "HoldPlaced" => "Hold Placed",
+        "HoldReleased" => "Hold Released",
+        "CustomsCleared" => "Customs Cleared",
+        "ManualUpdate" => "Manual Update",
+        _ => code
+    };
 
     public void Dispose() { }
 
@@ -197,8 +280,13 @@
         public string EventType { get; set; } = "";
         public string ProviderType { get; set; } = "";
         public string Description { get; set; } = "";
-        public string Location { get; set; } = "";
-        public DateTime OccurredAt { get; set; }
+        public string? Location { get; set; }
+        public DateTime EventTime { get; set; }
+    }
+    class PollResult
+    {
+        public int NewEvents { get; set; }
+        public string Message { get; set; } = "";
     }
     class ManualEventForm
     {
