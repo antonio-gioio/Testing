@@ -123,6 +123,7 @@ builder.Services.AddScoped<ISignalRPublisher, SignalRPublisher>();
 // ─── Background Workers ────────────────────────────────────────────────────
 builder.Services.AddHostedService<TrackingPollingWorker>();
 builder.Services.AddHostedService<AlertProcessingWorker>();
+builder.Services.AddHostedService<VesselPositionWorker>();
 
 // ─── Alert & Manual Tracking Services ─────────────────────────────────────
 builder.Services.AddScoped<AlertProcessingService>();

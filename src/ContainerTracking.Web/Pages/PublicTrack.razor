@@ -1,0 +1,103 @@
+@page "/track/{Token}"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Track Shipment — ContainerTrack</PageTitle>
+
+<div class="ct-auth-page">
+    <div class="ct-auth-card" style="max-width:640px">
+        <div class="ct-auth-logo">
+            <span style="font-size:2rem">📦</span>
+            <h1>Container Tracking</h1>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="ct-loading">Loading tracking info...</div>
+        }
+        else if (_data == null)
+        {
+            <div class="ct-alert ct-alert-error">Tracking link not found or has expired.</div>
+        }
+        else
+        {
+            <div class="ct-card" style="margin-top:1.5rem">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                    <span class="ct-font-mono" style="font-size:1.1rem">@_data.ContainerNumber</span>
+                    <span class="ct-badge ct-badge-@_data.Status.ToLower()">@_data.Status</span>
+                </div>
+                @if (!string.IsNullOrEmpty(_data.CurrentLocation))
+                {
+                    <div class="ct-kv-row"><span>Current Location</span><span>@_data.CurrentLocation</span></div>
+                }
+                @if (_data.Eta.HasValue)
+                {
+                    <div class="ct-kv-row"><span>Estimated Arrival</span><span>@_data.Eta.Value.ToString("dd MMM yyyy")</span></div>
+                }
+                @if (_data.LastUpdated.HasValue)
+                {
+                    <div class="ct-kv-row"><span>Last Updated</span><span>@_data.LastUpdated.Value.ToString("dd MMM HH:mm") UTC</span></div>
+                }
+            </div>
+
+            @if (_data.Events?.Any() == true)
+            {
+                <div class="ct-card" style="margin-top:1rem">
+                    <h3 style="margin-bottom:1rem">Event History</h3>
+                    <div class="ct-event-timeline">
+                        @foreach (var e in _data.Events)
+                        {
+                            <div class="ct-event-item">
+                                <div class="ct-event-dot"></div>
+                                <div class="ct-event-body">
+                                    <div class="ct-event-header">
+                                        <span class="ct-font-bold">@e.Type</span>
+                                    </div>
+                                    <div class="ct-event-desc">@e.Description</div>
+                                    <div class="ct-event-meta">
+                                        <span>@e.Location</span>
+                                        <span class="ct-text-muted">@e.Time.ToString("dd MMM yyyy HH:mm")</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div style="text-align:center;margin-top:1.5rem;color:var(--ct-text-muted);font-size:0.8rem">
+                Powered by ContainerTrack
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    private TrackingData? _data;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _data = await Api.GetAsync<TrackingData>($"track/{Token}");
+        _loading = false;
+    }
+
+    class TrackingData
+    {
+        public string ContainerNumber { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string? CurrentLocation { get; set; }
+        public DateTime? Eta { get; set; }
+        public DateTime? LastUpdated { get; set; }
+        public List<EventItem>? Events { get; set; }
+    }
+    class EventItem
+    {
+        public string Type { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string? Location { get; set; }
+        public DateTime Time { get; set; }
+    }
+}

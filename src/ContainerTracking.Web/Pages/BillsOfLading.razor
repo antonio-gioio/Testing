@@ -1,0 +1,180 @@
+@page "/bills-of-lading"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Bills of Lading — ContainerTrack</PageTitle>
+
+<div class="ct-page">
+    <div class="ct-page-header">
+        <h1>Bills of Lading</h1>
+        <button class="ct-btn ct-btn-primary" @onclick="() => _showCreate = true">+ New B/L</button>
+    </div>
+
+    <div class="ct-page-toolbar">
+        <input class="ct-input" style="max-width:300px" placeholder="Search B/L number, shipper, consignee..."
+               @oninput="e => { _search = e.Value?.ToString(); _ = LoadPage(1); }" />
+    </div>
+
+    @if (_loading)
+    {
+        <div class="ct-loading">Loading...</div>
+    }
+    else if (_bols?.Any() == true)
+    {
+        <div class="ct-card">
+            <table class="ct-table">
+                <thead>
+                    <tr>
+                        <th>B/L Number</th>
+                        <th>Carrier</th>
+                        <th>Shipper</th>
+                        <th>Consignee</th>
+                        <th>Origin</th>
+                        <th>Destination</th>
+                        <th>Issued</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var b in _bols)
+                    {
+                        <tr class="ct-row-clickable" @onclick="() => Nav.NavigateTo($'/bills-of-lading/{b.Id}')">
+                            <td class="ct-font-mono">@b.BolNumber</td>
+                            <td>@(b.CarrierName ?? "—")</td>
+                            <td>@(b.ShipperName ?? "—")</td>
+                            <td>@(b.ConsigneeName ?? "—")</td>
+                            <td>@(b.OriginPort ?? "—")</td>
+                            <td>@(b.DestinationPort ?? "—")</td>
+                            <td>@(b.IssueDate?.ToString("dd MMM yyyy") ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="ct-pagination">
+            <button class="ct-btn" disabled="@(_page <= 1)" @onclick="() => LoadPage(_page - 1)">← Prev</button>
+            <span>Page @_page of @_totalPages (@_total B/Ls)</span>
+            <button class="ct-btn" disabled="@(_page >= _totalPages)" @onclick="() => LoadPage(_page + 1)">Next →</button>
+        </div>
+    }
+    else
+    {
+        <div class="ct-empty-state">No bills of lading yet.</div>
+    }
+
+    @if (_showCreate)
+    {
+        <div class="ct-modal-overlay" @onclick="() => _showCreate = false">
+            <div class="ct-modal" @onclick:stopPropagation="true">
+                <div class="ct-modal-header">
+                    <h2>New Bill of Lading</h2>
+                    <button class="ct-btn-icon" @onclick="() => _showCreate = false">✕</button>
+                </div>
+                <div class="ct-modal-body">
+                    <div class="ct-form-group">
+                        <label>B/L Number *</label>
+                        <input class="ct-input" @bind="_form.BolNumber" placeholder="MAEU12345678" />
+                    </div>
+                    <div class="ct-form-row">
+                        <div class="ct-form-group">
+                            <label>Carrier</label>
+                            <input class="ct-input" @bind="_form.CarrierName" placeholder="Maersk" />
+                        </div>
+                        <div class="ct-form-group">
+                            <label>Issue Date</label>
+                            <input type="date" class="ct-input" @bind="_form.IssueDate" />
+                        </div>
+                    </div>
+                    <div class="ct-form-row">
+                        <div class="ct-form-group">
+                            <label>Shipper</label>
+                            <input class="ct-input" @bind="_form.ShipperName" placeholder="Acme Corp" />
+                        </div>
+                        <div class="ct-form-group">
+                            <label>Consignee</label>
+                            <input class="ct-input" @bind="_form.ConsigneeName" placeholder="EuroTrade GmbH" />
+                        </div>
+                    </div>
+                    <div class="ct-form-row">
+                        <div class="ct-form-group">
+                            <label>Port of Loading</label>
+                            <input class="ct-input" @bind="_form.OriginPort" placeholder="Shanghai" />
+                        </div>
+                        <div class="ct-form-group">
+                            <label>Port of Discharge</label>
+                            <input class="ct-input" @bind="_form.DestinationPort" placeholder="Rotterdam" />
+                        </div>
+                    </div>
+                </div>
+                <div class="ct-modal-footer">
+                    <button class="ct-btn" @onclick="() => _showCreate = false">Cancel</button>
+                    <button class="ct-btn ct-btn-primary" @onclick="CreateBol">Create B/L</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<BolItem>? _bols;
+    private bool _loading, _showCreate;
+    private int _page = 1, _totalPages = 1, _total;
+    private string? _search;
+    private readonly BolForm _form = new();
+
+    protected override async Task OnInitializedAsync() => await LoadPage(1);
+
+    private async Task LoadPage(int page)
+    {
+        _loading = true;
+        _page = page;
+        var url = $"api/v1/bills-of-lading?page={page}&pageSize=20";
+        if (!string.IsNullOrEmpty(_search)) url += $"&search={Uri.EscapeDataString(_search)}";
+        var result = await Api.GetAsync<PagedResult>(url);
+        _bols = result?.Items ?? new();
+        _total = result?.Total ?? 0;
+        _totalPages = result?.TotalPages ?? 1;
+        _loading = false;
+    }
+
+    private async Task CreateBol()
+    {
+        var response = await Api.PostAsync("api/v1/bills-of-lading", new
+        {
+            bolNumber = _form.BolNumber,
+            carrierName = _form.CarrierName,
+            shipperName = _form.ShipperName,
+            consigneeName = _form.ConsigneeName,
+            originPort = _form.OriginPort,
+            destinationPort = _form.DestinationPort,
+            issueDate = _form.IssueDate
+        });
+        if (response.IsSuccessStatusCode)
+        {
+            _showCreate = false;
+            await LoadPage(1);
+        }
+    }
+
+    class BolItem
+    {
+        public Guid Id { get; set; }
+        public string BolNumber { get; set; } = "";
+        public string? CarrierName { get; set; }
+        public string? ShipperName { get; set; }
+        public string? ConsigneeName { get; set; }
+        public string? OriginPort { get; set; }
+        public string? DestinationPort { get; set; }
+        public DateTime? IssueDate { get; set; }
+    }
+    class PagedResult { public List<BolItem> Items { get; set; } = new(); public int Total { get; set; } public int TotalPages { get; set; } }
+    class BolForm
+    {
+        public string BolNumber { get; set; } = "";
+        public string? CarrierName { get; set; }
+        public string? ShipperName { get; set; }
+        public string? ConsigneeName { get; set; }
+        public string? OriginPort { get; set; }
+        public string? DestinationPort { get; set; }
+        public DateTime? IssueDate { get; set; }
+    }
+}

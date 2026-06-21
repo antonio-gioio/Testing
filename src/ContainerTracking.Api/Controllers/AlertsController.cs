@@ -108,6 +108,22 @@ public class AlertsController : ControllerBase
         return Ok();
     }
 
+    [HttpPost("notifications/read-all")]
+    public async Task<IActionResult> MarkAllRead(CancellationToken ct = default)
+    {
+        var orgId = GetOrgId();
+        var unread = await _db.Notifications
+            .Where(n => n.OrganizationId == orgId && n.ReadAt == null)
+            .ToListAsync(ct);
+        foreach (var n in unread)
+        {
+            n.ReadAt = DateTime.UtcNow;
+            n.Status = Core.Enums.NotificationStatus.Read;
+        }
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { marked = unread.Count });
+    }
+
     private Guid GetOrgId()
     {
         var id = _orgContext.OrganizationId;

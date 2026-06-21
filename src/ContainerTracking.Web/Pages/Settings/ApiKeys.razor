@@ -1,0 +1,143 @@
+@page "/settings/api-keys"
+@inject ApiClient Api
+
+<PageTitle>API Keys — ContainerTrack</PageTitle>
+
+<div class="ct-page">
+    <div class="ct-page-header">
+        <div>
+            <a href="/settings" class="ct-back-link">← Settings</a>
+            <h1>API Keys</h1>
+        </div>
+        <button class="ct-btn ct-btn-primary" @onclick="() => _showCreate = !_showCreate">+ New API Key</button>
+    </div>
+
+    @if (_showCreate)
+    {
+        <div class="ct-card" style="margin-bottom:1.5rem">
+            <h2 class="ct-section-title">Create API Key</h2>
+            <div class="ct-form-group">
+                <label>Key Name *</label>
+                <input class="ct-input" @bind="_form.Name" placeholder="Production Integration" />
+            </div>
+            <div class="ct-form-group">
+                <label>Scopes</label>
+                <div class="ct-checkbox-group">
+                    <label><input type="checkbox" @bind="_scopeContainers" /> containers:read</label>
+                    <label><input type="checkbox" @bind="_scopeShipments" /> shipments:read</label>
+                    <label><input type="checkbox" @bind="_scopeWrite" /> write</label>
+                    <label><input type="checkbox" @bind="_scopeAdmin" /> admin</label>
+                </div>
+            </div>
+            <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+                <button class="ct-btn ct-btn-primary" @onclick="CreateKey">Create</button>
+                <button class="ct-btn" @onclick="() => _showCreate = false">Cancel</button>
+            </div>
+        </div>
+    }
+
+    @if (_newKeyValue != null)
+    {
+        <div class="ct-alert ct-alert-success" style="margin-bottom:1.5rem">
+            <strong>API key created. Copy it now — it won't be shown again:</strong>
+            <div class="ct-font-mono" style="margin-top:0.5rem;word-break:break-all;user-select:all">@_newKeyValue</div>
+        </div>
+    }
+
+    @if (_keys?.Any() == true)
+    {
+        <div class="ct-card">
+            <table class="ct-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Prefix</th>
+                        <th>Scopes</th>
+                        <th>Calls</th>
+                        <th>Last Used</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var key in _keys)
+                    {
+                        <tr>
+                            <td>@key.Name</td>
+                            <td class="ct-font-mono">@key.KeyPrefix…</td>
+                            <td>@string.Join(", ", key.Scopes)</td>
+                            <td>@key.CallCount</td>
+                            <td>@(key.LastUsedAt?.ToString("dd MMM HH:mm") ?? "Never")</td>
+                            <td>@key.CreatedAt.ToString("dd MMM yyyy")</td>
+                            <td>
+                                <button class="ct-btn-icon ct-text-danger" @onclick="() => RevokeKey(key.Id)" title="Revoke">🗑</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else if (_keys != null)
+    {
+        <div class="ct-empty-state">No API keys yet. Create one to integrate with external systems.</div>
+    }
+</div>
+
+@code {
+    private List<ApiKeyItem>? _keys;
+    private bool _showCreate;
+    private string? _newKeyValue;
+    private readonly CreateKeyForm _form = new();
+    private bool _scopeContainers = true, _scopeShipments = true, _scopeWrite, _scopeAdmin;
+
+    protected override async Task OnInitializedAsync() => await LoadKeys();
+
+    private async Task LoadKeys()
+    {
+        _keys = await Api.GetAsync<List<ApiKeyItem>>("api/v1/api-keys");
+    }
+
+    private async Task CreateKey()
+    {
+        var scopes = new List<string>();
+        if (_scopeContainers) scopes.Add("containers:read");
+        if (_scopeShipments) scopes.Add("shipments:read");
+        if (_scopeWrite) scopes.Add("write");
+        if (_scopeAdmin) scopes.Add("admin");
+
+        var response = await Api.PostAsync<CreateKeyResponse>("api/v1/api-keys", new
+        {
+            name = _form.Name,
+            scopes
+        });
+
+        if (response != null)
+        {
+            _newKeyValue = response.Key;
+            _showCreate = false;
+            _form.Name = "";
+            await LoadKeys();
+        }
+    }
+
+    private async Task RevokeKey(Guid id)
+    {
+        await Api.DeleteAsync($"api/v1/api-keys/{id}");
+        _newKeyValue = null;
+        await LoadKeys();
+    }
+
+    class ApiKeyItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public string KeyPrefix { get; set; } = "";
+        public List<string> Scopes { get; set; } = new();
+        public int CallCount { get; set; }
+        public DateTime? LastUsedAt { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+    class CreateKeyResponse { public string Key { get; set; } = ""; }
+    class CreateKeyForm { public string Name { get; set; } = ""; }
+}
