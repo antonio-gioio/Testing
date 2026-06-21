@@ -1,0 +1,117 @@
+@page "/register"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Create Account — ContainerTrack</PageTitle>
+
+<div class="ct-auth-page">
+    <div class="ct-auth-card">
+        <div class="ct-auth-logo">
+            <span style="font-size:2rem">📦</span>
+            <h1>Get Started</h1>
+            <p>Create your organization and start tracking</p>
+        </div>
+
+        <EditForm Model="_model" OnValidSubmit="HandleRegister">
+            <DataAnnotationsValidator />
+
+            @if (_error != null)
+            {
+                <div class="ct-alert ct-alert-error">@_error</div>
+            }
+
+            <div class="ct-form-row">
+                <div class="ct-form-group">
+                    <label>First Name</label>
+                    <InputText class="ct-input" @bind-Value="_model.FirstName" placeholder="Jane" />
+                </div>
+                <div class="ct-form-group">
+                    <label>Last Name</label>
+                    <InputText class="ct-input" @bind-Value="_model.LastName" placeholder="Smith" />
+                </div>
+            </div>
+
+            <div class="ct-form-group">
+                <label>Work Email</label>
+                <InputText type="email" class="ct-input" @bind-Value="_model.Email" placeholder="jane@company.com" />
+            </div>
+
+            <div class="ct-form-group">
+                <label>Organization Name</label>
+                <InputText class="ct-input" @bind-Value="_model.OrganizationName" placeholder="Acme Logistics Ltd" />
+            </div>
+
+            <div class="ct-form-group">
+                <label>Password</label>
+                <InputText type="password" class="ct-input" @bind-Value="_model.Password" placeholder="Minimum 8 characters" />
+            </div>
+
+            <div class="ct-form-group ct-terms">
+                <label>
+                    <input type="checkbox" @bind="_acceptTerms" />
+                    I agree to the Terms of Service and Privacy Policy
+                </label>
+            </div>
+
+            <button type="submit" class="ct-btn ct-btn-primary ct-btn-full" disabled="@(!_acceptTerms || _loading)">
+                @if (_loading) { <span class="ct-spinner-sm"></span> }
+                Create Account — Free
+            </button>
+        </EditForm>
+
+        <div class="ct-auth-footer">
+            Already have an account? <a href="/login">Sign in</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly RegisterModel _model = new();
+    private string? _error;
+    private bool _loading;
+    private bool _acceptTerms;
+
+    private async Task HandleRegister()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var response = await Api.PostAsync("api/v1/auth/register", new
+            {
+                firstName = _model.FirstName,
+                lastName = _model.LastName,
+                email = _model.Email,
+                password = _model.Password,
+                organizationName = _model.OrganizationName
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<LoginResult>();
+                if (result != null)
+                {
+                    await Api.LoginAsync(_model.Email, _model.Password);
+                    Nav.NavigateTo("/");
+                }
+            }
+            else
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                _error = "Registration failed. " + (err.Length < 200 ? err : "Please try again.");
+            }
+        }
+        catch { _error = "Registration failed. Please try again."; }
+        finally { _loading = false; }
+    }
+
+    class RegisterModel
+    {
+        [System.ComponentModel.DataAnnotations.Required] public string FirstName { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required] public string LastName { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress]
+        public string Email { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required] public string OrganizationName { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MinLength(8)]
+        public string Password { get; set; } = "";
+    }
+}

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ContainerTrack — Live Cargo Visibility</title>
+    <base href="/" />
+
+    <!-- Inter font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- JetBrains Mono for container numbers -->
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+    <!-- App CSS -->
+    <link href="css/app.css" rel="stylesheet" />
+    <link href="ContainerTracking.Web.styles.css" rel="stylesheet" />
+
+    <link rel="icon" href="favicon.ico" />
+</head>
+<body>
+    <div id="app">
+        <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0f172a;color:#e2e8f0;flex-direction:column;gap:1rem">
+            <div style="font-size:2rem">📦</div>
+            <div style="font-weight:600;font-size:1.1rem">Loading ContainerTrack...</div>
+            <div class="ct-spinner"></div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN2GqaY=" crossorigin=""></script>
+    <!-- Leaflet.RotatedMarker for vessel heading -->
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.min.js"></script>
+
+    <!-- App map module -->
+    <script src="js/map.js"></script>
+
+    <!-- Blazor WASM runtime -->
+    <script src="_framework/blazor.webassembly.js"></script>
+
+    <style>
+        .ct-spinner {
+            width: 32px; height: 32px;
+            border: 3px solid rgba(99,102,241,0.3);
+            border-top-color: #6366f1;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        #blazor-error-ui {
+            background: #ef4444; bottom: 0; box-shadow: 0 -1px 2px rgba(0,0,0,.2);
+            display: none; left: 0; padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+            position: fixed; width: 100%; z-index: 1000;
+        }
+        #blazor-error-ui .dismiss { cursor: pointer; }
+    </style>
+</body>
+</html>

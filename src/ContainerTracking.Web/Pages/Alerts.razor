@@ -1,0 +1,251 @@
+@page "/alerts"
+@inject ApiClient Api
+@inject TrackingHubService Hub
+
+<PageTitle>Alerts — ContainerTrack</PageTitle>
+
+<div class="ct-page">
+    <div class="ct-page-header">
+        <h1>Alerts & Notifications</h1>
+        <button class="ct-btn ct-btn-primary" @onclick="() => _showCreate = true">+ New Alert Rule</button>
+    </div>
+
+    <div class="ct-alerts-layout">
+        <section class="ct-alert-rules">
+            <h2 class="ct-section-title">Alert Rules</h2>
+            @if (_alerts?.Any() == true)
+            {
+                <div class="ct-alert-rule-list">
+                    @foreach (var alert in _alerts)
+                    {
+                        <div class="ct-alert-rule ct-severity-@alert.Severity.ToLower()">
+                            <div class="ct-alert-rule-header">
+                                <div>
+                                    <span class="ct-font-bold">@alert.Name</span>
+                                    <span class="ct-badge ct-badge-@alert.TriggerType.ToLower()">@alert.TriggerType</span>
+                                </div>
+                                <div style="display:flex;gap:0.5rem;align-items:center">
+                                    <label class="ct-toggle">
+                                        <input type="checkbox" checked="@alert.IsEnabled" @onchange="() => ToggleAlert(alert.Id, !alert.IsEnabled)" />
+                                        <span class="ct-toggle-track"></span>
+                                    </label>
+                                    <button class="ct-btn-icon ct-text-danger" @onclick="() => DeleteAlert(alert.Id)" title="Delete">🗑</button>
+                                </div>
+                            </div>
+                            <div class="ct-alert-rule-meta">
+                                <span>Channels: @string.Join(", ", alert.NotificationChannels)</span>
+                                @if (alert.LastTriggeredAt.HasValue)
+                                {
+                                    <span>Last triggered: @alert.LastTriggeredAt.Value.ToString("dd MMM HH:mm")</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="ct-empty-state">No alert rules configured. Add a rule to get notified of tracking events.</div>
+            }
+        </section>
+
+        <section class="ct-notifications-panel">
+            <h2 class="ct-section-title">Recent Notifications
+                @if (_unreadCount > 0)
+                {
+                    <span class="ct-badge ct-badge-danger">@_unreadCount</span>
+                }
+            </h2>
+            @if (_notifications?.Any() == true)
+            {
+                <div class="ct-notification-feed">
+                    @foreach (var n in _notifications)
+                    {
+                        <div class="ct-notification-item ct-severity-@n.Severity.ToLower() @(n.ReadAt == null ? "ct-unread" : "")"
+                             @onclick="() => MarkRead(n.Id)">
+                            <div class="ct-notification-icon">@GetSeverityIcon(n.Severity)</div>
+                            <div class="ct-notification-body">
+                                <div class="ct-notification-title">@n.Title</div>
+                                <div class="ct-notification-msg">@n.Message</div>
+                                <div class="ct-notification-time">@FormatTime(n.CreatedAt)</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="ct-empty-state">No recent notifications</div>
+            }
+        </section>
+    </div>
+
+    @if (_showCreate)
+    {
+        <div class="ct-modal-overlay" @onclick="() => _showCreate = false">
+            <div class="ct-modal" @onclick:stopPropagation="true">
+                <div class="ct-modal-header">
+                    <h2>New Alert Rule</h2>
+                    <button class="ct-btn-icon" @onclick="() => _showCreate = false">✕</button>
+                </div>
+                <div class="ct-modal-body">
+                    <div class="ct-form-group">
+                        <label>Alert Name *</label>
+                        <input class="ct-input" @bind="_form.Name" placeholder="Delay Detected" />
+                    </div>
+                    <div class="ct-form-row">
+                        <div class="ct-form-group">
+                            <label>Trigger</label>
+                            <select class="ct-input" @bind="_form.TriggerType">
+                                <option value="DelayDetected">Delay Detected</option>
+                                <option value="StatusChange">Status Change</option>
+                                <option value="EtaChanged">ETA Changed</option>
+                                <option value="PortArrival">Port Arrival</option>
+                                <option value="PortDeparture">Port Departure</option>
+                            </select>
+                        </div>
+                        <div class="ct-form-group">
+                            <label>Severity</label>
+                            <select class="ct-input" @bind="_form.Severity">
+                                <option value="Info">Info</option>
+                                <option value="Warning">Warning</option>
+                                <option value="Critical">Critical</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="ct-form-group">
+                        <label>Notification Channels</label>
+                        <div class="ct-checkbox-group">
+                            <label><input type="checkbox" @bind="_notifyInApp" /> In-App</label>
+                            <label><input type="checkbox" @bind="_notifyEmail" /> Email</label>
+                            <label><input type="checkbox" @bind="_notifyWebhook" /> Webhook</label>
+                        </div>
+                    </div>
+                    @if (_notifyEmail)
+                    {
+                        <div class="ct-form-group">
+                            <label>Recipient Emails (comma-separated)</label>
+                            <input class="ct-input" @bind="_form.RecipientEmailsStr" placeholder="ops@company.com, manager@company.com" />
+                        </div>
+                    }
+                    @if (_notifyWebhook)
+                    {
+                        <div class="ct-form-group">
+                            <label>Webhook URL</label>
+                            <input class="ct-input" @bind="_form.WebhookUrl" placeholder="https://hooks.slack.com/..." />
+                        </div>
+                    }
+                </div>
+                <div class="ct-modal-footer">
+                    <button class="ct-btn" @onclick="() => _showCreate = false">Cancel</button>
+                    <button class="ct-btn ct-btn-primary" @onclick="CreateAlert">Create Alert</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<AlertItem>? _alerts;
+    private List<NotificationItem>? _notifications;
+    private int _unreadCount;
+    private bool _showCreate;
+    private readonly AlertForm _form = new();
+    private bool _notifyInApp = true, _notifyEmail, _notifyWebhook;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadAlerts(), LoadNotifications());
+        Hub.AlertReceived += async _ => { await LoadNotifications(); await InvokeAsync(StateHasChanged); };
+    }
+
+    private async Task LoadAlerts()
+    {
+        _alerts = await Api.GetAsync<List<AlertItem>>("api/v1/alerts");
+    }
+
+    private async Task LoadNotifications()
+    {
+        _notifications = await Api.GetAsync<List<NotificationItem>>("api/v1/alerts/notifications");
+        _unreadCount = _notifications?.Count(n => n.ReadAt == null) ?? 0;
+    }
+
+    private async Task CreateAlert()
+    {
+        var channels = new List<string>();
+        if (_notifyInApp) channels.Add("InApp");
+        if (_notifyEmail) channels.Add("Email");
+        if (_notifyWebhook) channels.Add("Webhook");
+
+        var response = await Api.PostAsync("api/v1/alerts", new
+        {
+            name = _form.Name,
+            triggerType = _form.TriggerType,
+            severity = _form.Severity,
+            conditions = new Dictionary<string, string>(),
+            notificationChannels = channels,
+            recipientEmails = _form.RecipientEmailsStr?.Split(',').Select(e => e.Trim()).Where(e => e.Length > 0).ToList() ?? new(),
+            webhookUrl = _form.WebhookUrl,
+            cooldownMinutes = 60
+        });
+
+        if (response.IsSuccessStatusCode) { _showCreate = false; await LoadAlerts(); }
+    }
+
+    private async Task ToggleAlert(Guid id, bool enabled) => await LoadAlerts();
+
+    private async Task DeleteAlert(Guid id)
+    {
+        await Api.DeleteAsync($"api/v1/alerts/{id}");
+        await LoadAlerts();
+    }
+
+    private async Task MarkRead(Guid id)
+    {
+        await Api.PostAsync($"api/v1/alerts/notifications/{id}/read", new { });
+        await LoadNotifications();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string GetSeverityIcon(string severity) => severity switch
+    {
+        "Critical" => "🔴", "Warning" => "🟡", _ => "🔵"
+    };
+
+    private static string FormatTime(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt;
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1) return $"{(int)diff.TotalHours}h ago";
+        return dt.ToString("dd MMM HH:mm");
+    }
+
+    class AlertItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public string TriggerType { get; set; } = "";
+        public string Severity { get; set; } = "";
+        public bool IsEnabled { get; set; }
+        public List<string> NotificationChannels { get; set; } = new();
+        public DateTime? LastTriggeredAt { get; set; }
+    }
+    class NotificationItem
+    {
+        public Guid Id { get; set; }
+        public string Title { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string Severity { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public DateTime? ReadAt { get; set; }
+    }
+    class AlertForm
+    {
+        public string Name { get; set; } = "";
+        public string TriggerType { get; set; } = "DelayDetected";
+        public string Severity { get; set; } = "Warning";
+        public string? RecipientEmailsStr { get; set; }
+        public string? WebhookUrl { get; set; }
+    }
+}

@@ -1,0 +1,199 @@
+@page "/shipments"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Shipments — ContainerTrack</PageTitle>
+
+<div class="ct-page">
+    <div class="ct-page-header">
+        <h1>Shipments</h1>
+        <div class="ct-header-actions">
+            <select class="ct-input ct-select" @onchange="OnStatusFilter">
+                <option value="">All Statuses</option>
+                @foreach (var s in Statuses)
+                {
+                    <option value="@s">@s</option>
+                }
+            </select>
+            <button class="ct-btn ct-btn-primary" @onclick="ShowCreateModal">+ New Shipment</button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="ct-loading">Loading shipments...</div>
+    }
+    else if (_shipments?.Any() == true)
+    {
+        <div class="ct-shipment-cards">
+            @foreach (var s in _shipments)
+            {
+                <div class="ct-shipment-card" @onclick="() => Nav.NavigateTo($"/shipments/{s.Id}")">
+                    <div class="ct-shipment-card-header">
+                        <span class="ct-shipment-ref">@s.Reference</span>
+                        <span class="ct-badge ct-badge-@s.Status.ToLower()">@s.Status</span>
+                    </div>
+                    <div class="ct-shipment-route">
+                        <span class="ct-port">@(s.OriginPort ?? "—")</span>
+                        <span class="ct-route-arrow">→</span>
+                        <span class="ct-port">@(s.DestinationPort ?? "—")</span>
+                    </div>
+                    <div class="ct-shipment-meta">
+                        <span title="Containers">📦 @s.ContainerCount</span>
+                        @if (s.EstimatedArrival.HasValue)
+                        {
+                            var daysLeft = (int)(s.EstimatedArrival.Value - DateTime.UtcNow).TotalDays;
+                            <span title="ETA" class="@(daysLeft < 0 ? "ct-text-danger" : "")">
+                                🗓 @s.EstimatedArrival.Value.ToString("dd MMM yyyy")
+                                @if (daysLeft < 0) { <span> (@Math.Abs(daysLeft)d late)</span> }
+                                else if (daysLeft == 0) { <span> (Today)</span> }
+                                else { <span> (@daysLeft d)</span> }
+                            </span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="ct-pagination">
+            <button class="ct-btn" disabled="@(_page <= 1)" @onclick="() => LoadPage(_page - 1)">← Prev</button>
+            <span>Page @_page of @_totalPages (@_total shipments)</span>
+            <button class="ct-btn" disabled="@(_page >= _totalPages)" @onclick="() => LoadPage(_page + 1)">Next →</button>
+        </div>
+    }
+    else
+    {
+        <div class="ct-empty-state">
+            <div style="font-size:3rem;margin-bottom:1rem">🚢</div>
+            <p>No shipments yet. Create your first shipment to start tracking containers.</p>
+            <button class="ct-btn ct-btn-primary" style="margin-top:1rem" @onclick="ShowCreateModal">Create Shipment</button>
+        </div>
+    }
+
+    @if (_showCreate)
+    {
+        <div class="ct-modal-overlay" @onclick="CloseModal">
+            <div class="ct-modal" @onclick:stopPropagation="true">
+                <div class="ct-modal-header">
+                    <h2>New Shipment</h2>
+                    <button class="ct-btn-icon" @onclick="CloseModal">✕</button>
+                </div>
+                <div class="ct-modal-body">
+                    <div class="ct-form-group">
+                        <label>Reference *</label>
+                        <input class="ct-input" @bind="_form.Reference" placeholder="SHP-2024-001" />
+                    </div>
+                    <div class="ct-form-row">
+                        <div class="ct-form-group">
+                            <label>Origin Port</label>
+                            <input class="ct-input" @bind="_form.OriginPort" placeholder="Shanghai" />
+                        </div>
+                        <div class="ct-form-group">
+                            <label>Destination Port</label>
+                            <input class="ct-input" @bind="_form.DestinationPort" placeholder="Rotterdam" />
+                        </div>
+                    </div>
+                    <div class="ct-form-row">
+                        <div class="ct-form-group">
+                            <label>Carrier</label>
+                            <input class="ct-input" @bind="_form.CarrierName" placeholder="Maersk" />
+                        </div>
+                        <div class="ct-form-group">
+                            <label>Voyage #</label>
+                            <input class="ct-input" @bind="_form.VoyageNumber" placeholder="123E" />
+                        </div>
+                    </div>
+                    <div class="ct-form-row">
+                        <div class="ct-form-group">
+                            <label>ETD</label>
+                            <input type="date" class="ct-input" @bind="_form.EstimatedDeparture" />
+                        </div>
+                        <div class="ct-form-group">
+                            <label>ETA</label>
+                            <input type="date" class="ct-input" @bind="_form.EstimatedArrival" />
+                        </div>
+                    </div>
+                    <div class="ct-form-group">
+                        <label>Description</label>
+                        <textarea class="ct-input" rows="2" @bind="_form.Description"></textarea>
+                    </div>
+                </div>
+                <div class="ct-modal-footer">
+                    <button class="ct-btn" @onclick="CloseModal">Cancel</button>
+                    <button class="ct-btn ct-btn-primary" @onclick="CreateShipment">Create Shipment</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ShipmentItem>? _shipments;
+    private bool _loading;
+    private bool _showCreate;
+    private int _page = 1, _totalPages = 1, _total;
+    private string? _statusFilter;
+    private readonly ShipmentForm _form = new();
+
+    private static readonly string[] Statuses = ["Draft", "Active", "InTransit", "Arrived", "Delivered", "Delayed"];
+
+    protected override async Task OnInitializedAsync() => await LoadPage(1);
+
+    private async Task LoadPage(int page)
+    {
+        _loading = true;
+        _page = page;
+        var url = $"api/v1/shipments?page={page}&pageSize=12";
+        if (!string.IsNullOrEmpty(_statusFilter)) url += $"&status={_statusFilter}";
+        var result = await Api.GetAsync<PagedResult>(url);
+        _shipments = result?.Items ?? new();
+        _total = result?.Total ?? 0;
+        _totalPages = result?.TotalPages ?? 1;
+        _loading = false;
+    }
+
+    private async Task OnStatusFilter(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString();
+        await LoadPage(1);
+    }
+
+    private void ShowCreateModal() => _showCreate = true;
+    private void CloseModal() => _showCreate = false;
+
+    private async Task CreateShipment()
+    {
+        var response = await Api.PostAsync("api/v1/shipments", _form);
+        if (response.IsSuccessStatusCode)
+        {
+            CloseModal();
+            await LoadPage(1);
+        }
+    }
+
+    class ShipmentItem
+    {
+        public Guid Id { get; set; }
+        public string Reference { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string? OriginPort { get; set; }
+        public string? DestinationPort { get; set; }
+        public DateTime? EstimatedArrival { get; set; }
+        public int ContainerCount { get; set; }
+    }
+    class PagedResult { public List<ShipmentItem> Items { get; set; } = new(); public int Total { get; set; } public int TotalPages { get; set; } }
+    class ShipmentForm
+    {
+        public string Reference { get; set; } = "";
+        public string? Description { get; set; }
+        public string? CarrierName { get; set; }
+        public string? OriginPort { get; set; }
+        public string? OriginPortCode { get; set; }
+        public string? DestinationPort { get; set; }
+        public string? DestinationPortCode { get; set; }
+        public DateTime? EstimatedDeparture { get; set; }
+        public DateTime? EstimatedArrival { get; set; }
+        public string? VoyageNumber { get; set; }
+        public string? Incoterms { get; set; }
+    }
+}

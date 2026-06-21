@@ -1,0 +1,96 @@
+@page "/login"
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject ILocalStorageService Storage
+
+<PageTitle>Sign In — ContainerTrack</PageTitle>
+
+<div class="ct-auth-page">
+    <div class="ct-auth-card">
+        <div class="ct-auth-logo">
+            <span style="font-size:2rem">📦</span>
+            <h1>ContainerTrack</h1>
+            <p>Live cargo visibility</p>
+        </div>
+
+        <EditForm Model="_model" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+
+            @if (_error != null)
+            {
+                <div class="ct-alert ct-alert-error">@_error</div>
+            }
+
+            <div class="ct-form-group">
+                <label>Email</label>
+                <InputText type="email" class="ct-input" @bind-Value="_model.Email"
+                           placeholder="you@company.com" />
+                <ValidationMessage For="@(() => _model.Email)" />
+            </div>
+
+            <div class="ct-form-group">
+                <label>Password</label>
+                <InputText type="password" class="ct-input" @bind-Value="_model.Password"
+                           placeholder="••••••••" />
+                <ValidationMessage For="@(() => _model.Password)" />
+            </div>
+
+            <button type="submit" class="ct-btn ct-btn-primary ct-btn-full" disabled="@_loading">
+                @if (_loading) { <span class="ct-spinner-sm"></span> }
+                Sign In
+            </button>
+        </EditForm>
+
+        <div class="ct-auth-footer">
+            <a href="/register">Create an account</a>
+            <span>·</span>
+            <a href="/forgot-password">Forgot password?</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly LoginModel _model = new();
+    private string? _error;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await Storage.GetItemAsStringAsync("auth_token");
+        if (!string.IsNullOrEmpty(token))
+            Nav.NavigateTo("/");
+    }
+
+    private async Task HandleLogin()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var result = await Api.LoginAsync(_model.Email, _model.Password);
+            if (result != null)
+                Nav.NavigateTo("/");
+            else
+                _error = "Invalid email or password.";
+        }
+        catch (Exception ex)
+        {
+            _error = "Login failed. Please try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    class LoginModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(8)]
+        public string Password { get; set; } = string.Empty;
+    }
+}
