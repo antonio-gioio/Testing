@@ -191,7 +191,8 @@
 
     private async Task LoadEvents()
     {
-        _events = await Api.GetAsync<List<EventItem>>($"api/v1/containers/{Id}/events");
+        var paged = await Api.GetAsync<PagedEventResult>($"api/v1/containers/{Id}/events?pageSize=100");
+        _events = paged?.Items;
     }
 
     private async Task RefreshTracking()
@@ -273,6 +274,13 @@
         public string? PublicTrackingToken { get; set; }
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
+    }
+    class PagedEventResult
+    {
+        public List<EventItem> Items { get; set; } = new();
+        public int Total { get; set; }
+        public int Page { get; set; }
+        public int TotalPages { get; set; }
     }
     class EventItem
     {

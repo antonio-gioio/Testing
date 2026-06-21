@@ -40,7 +40,7 @@ public class BillsOfLadingController(AppDbContext db, ICurrentOrganizationContex
     {
         var orgId = ctx.OrganizationId;
         var bol = await db.BillsOfLading
-            .Include(b => b.TrackingEvents.Where(e => !e.IsDeleted).OrderByDescending(e => e.OccurredAt).Take(50))
+            .Include(b => b.TrackingEvents.Where(e => !e.IsDeleted).OrderByDescending(e => e.EventTime).Take(50))
             .FirstOrDefaultAsync(b => b.Id == id && b.OrganizationId == orgId && !b.IsDeleted);
         if (bol == null) return NotFound();
 
@@ -52,7 +52,7 @@ public class BillsOfLadingController(AppDbContext db, ICurrentOrganizationContex
             bol.CreatedAt, bol.UpdatedAt,
             events = bol.TrackingEvents.Select(e => new
             {
-                e.Id, EventType = e.EventType.ToString(), e.Description, e.Location, e.OccurredAt, ProviderType = e.ProviderType.ToString()
+                e.Id, EventType = e.EventType.ToString(), e.Description, e.Location, EventTime = e.EventTime, ProviderType = e.ProviderType.ToString()
             })
         });
     }
