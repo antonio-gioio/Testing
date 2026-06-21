@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ct-api-config
+  namespace: container-tracking
+data:
+  ASPNETCORE_ENVIRONMENT: "Production"
+  ASPNETCORE_URLS: "http://+:8080"
+  Jwt__Issuer: "container-tracking-api"
+  Jwt__Audience: "container-tracking-clients"
+  Cors__AllowedOrigins: "https://app.yourdomain.com"
+  Otlp__Endpoint: "http://otel-collector:4317"
+  Seq__ServerUrl: "http://seq:80"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ct-web-config
+  namespace: container-tracking
+data:
+  ApiBaseUrl: "https://api.yourdomain.com"

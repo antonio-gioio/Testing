@@ -1,0 +1,134 @@
+version: '3.9'
+
+services:
+  # ─── PostgreSQL with PostGIS ───────────────────────────────
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: ct-postgres
+    environment:
+      POSTGRES_DB: container_tracking
+      POSTGRES_USER: ct_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ct_postgres_data:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ct_user -d container_tracking"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ct-network
+
+  # ─── Redis ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ct-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme_dev} --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - ct_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:-changeme_dev}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - ct-network
+
+  # ─── API ───────────────────────────────────────────────────
+  ct-api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: ct-api
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=postgres;Database=container_tracking;Username=ct_user;Password=${DB_PASSWORD:-changeme_dev}"
+      ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD:-changeme_dev}"
+      Jwt__Secret: "${JWT_SECRET:-CHANGE_ME_IN_PROD_USE_256_BIT_KEY}"
+      Jwt__Issuer: "container-tracking-api"
+      Jwt__Audience: "container-tracking-clients"
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "5001:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ct_exports:/app/exports
+    networks:
+      - ct-network
+    restart: unless-stopped
+
+  # ─── Frontend ──────────────────────────────────────────────
+  ct-web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    container_name: ct-web
+    ports:
+      - "5002:80"
+    depends_on:
+      - ct-api
+    networks:
+      - ct-network
+    restart: unless-stopped
+
+  # ─── Observability ─────────────────────────────────────────
+  seq:
+    image: datalust/seq:latest
+    container_name: ct-seq
+    environment:
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5341:80"
+    volumes:
+      - ct_seq_data:/data
+    networks:
+      - ct-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ct-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ct_prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d'
+    ports:
+      - "9090:9090"
+    networks:
+      - ct-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ct-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ct_grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - ct-network
+
+networks:
+  ct-network:
+    driver: bridge
+
+volumes:
+  ct_postgres_data:
+  ct_redis_data:
+  ct_exports:
+  ct_seq_data:
+  ct_prometheus_data:
+  ct_grafana_data:

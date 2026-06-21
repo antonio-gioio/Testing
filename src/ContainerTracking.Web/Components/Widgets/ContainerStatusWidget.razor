@@ -1,0 +1,62 @@
+@inject ApiClient Api
+@inject TrackingHubService Hub
+
+<div class="ct-container-status">
+    @if (_statusGroups != null)
+    {
+        <div class="ct-status-chart">
+            @foreach (var group in _statusGroups)
+            {
+                <div class="ct-status-bar">
+                    <div class="ct-status-label">@group.Status</div>
+                    <div class="ct-status-bar-track">
+                        <div class="ct-status-bar-fill" style="width:@GetPercent(group.Count)%;background:@GetColor(group.Status)"></div>
+                    </div>
+                    <div class="ct-status-count">@group.Count</div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="ct-loading-sm">Loading...</div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrganizationId { get; set; }
+
+    private List<StatusGroup>? _statusGroups;
+    private int _total;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        Hub.ContainerUpdated += async _ =>
+        {
+            await LoadAsync();
+            await InvokeAsync(StateHasChanged);
+        };
+    }
+
+    private async Task LoadAsync()
+    {
+        _statusGroups = await Api.GetAsync<List<StatusGroup>>("api/v1/dashboard/containers-by-status");
+        _total = _statusGroups?.Sum(g => g.Count) ?? 0;
+    }
+
+    private double GetPercent(int count) => _total > 0 ? (double)count / _total * 100 : 0;
+
+    private string GetColor(string status) => status switch
+    {
+        "InTransit" => "#0ea5e9",
+        "Arrived" => "#10b981",
+        "Delayed" => "#ef4444",
+        "Delivered" => "#6366f1",
+        "GateIn" => "#f59e0b",
+        "Loaded" => "#8b5cf6",
+        _ => "#94a3b8"
+    };
+
+    record StatusGroup(string Status, int Count);
+}

@@ -1,0 +1,63 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+@inject ApiClient Api
+@inject TrackingHubService Hub
+@inject ILocalStorageService Storage
+
+<div class="ct-layout">
+    <aside class="ct-sidebar">
+        <div class="ct-logo">
+            <span class="ct-logo-icon">📦</span>
+            <span class="ct-logo-text">ContainerTrack</span>
+        </div>
+        <NavMenu />
+    </aside>
+
+    <div class="ct-main">
+        <header class="ct-topbar">
+            <div class="ct-topbar-left">
+                <h2 class="ct-page-title">@GetPageTitle()</h2>
+            </div>
+            <div class="ct-topbar-right">
+                <NotificationBell />
+                <UserMenu />
+            </div>
+        </header>
+
+        <main class="ct-content">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await Storage.GetItemAsStringAsync("auth_token");
+        if (string.IsNullOrEmpty(token))
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        await Hub.StartAsync();
+        Hub.AlertReceived += OnAlertReceived;
+    }
+
+    private void OnAlertReceived(ContainerTracking.Core.Models.AlertNotificationMessage alert)
+    {
+        Console.WriteLine($"Alert: {alert.Title}");
+    }
+
+    private string GetPageTitle() => Nav.Uri.Split('/').Last() switch
+    {
+        "" or "dashboard" => "Dashboard",
+        "containers" => "Containers",
+        "shipments" => "Shipments",
+        "alerts" => "Alerts",
+        "exports" => "Exports",
+        "settings" => "Settings",
+        "admin" => "Platform Admin",
+        _ => "ContainerTrack"
+    };
+}

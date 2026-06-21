@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ct-api
+  namespace: container-tracking
+  labels:
+    app: ct-api
+    version: v1
+spec:
+  replicas: 3  # Horizontal scaling — SignalR uses Redis backplane so all replicas share state
+  selector:
+    matchLabels:
+      app: ct-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ct-api
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: ct-api
+          image: your-registry/ct-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: ct-api-config
+          env:
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: ct-secrets
+                  key: DB_CONNECTION_STRING
+            - name: ConnectionStrings__Redis
+              valueFrom:
+                secretKeyRef:
+                  name: ct-secrets
+                  key: REDIS_CONNECTION_STRING
+            - name: Jwt__Secret
+              valueFrom:
+                secretKeyRef:
+                  name: ct-secrets
+                  key: JWT_SECRET
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1"
+          volumeMounts:
+            - name: exports
+              mountPath: /app/exports
+      volumes:
+        - name: exports
+          persistentVolumeClaim:
+            claimName: ct-exports-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ct-api-svc
+  namespace: container-tracking
+spec:
+  selector:
+    app: ct-api
+  ports:
+    - port: 80
+      targetPort: 8080
+      name: http
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ct-api-hpa
+  namespace: container-tracking
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ct-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ct-exports-pvc
+  namespace: container-tracking
+spec:
+  accessModes:
+    - ReadWriteMany  # Shared across API pods
+  resources:
+    requests:
+      storage: 20Gi

@@ -1,0 +1,43 @@
+@inject ApiClient Api
+@inject TrackingHubService Hub
+
+<div class="ct-alert-panel">
+    @if (_notifications?.Any() == true)
+    {
+        <ul class="ct-notification-list">
+            @foreach (var n in _notifications)
+            {
+                <li class="ct-notification ct-notification-@n.Severity.ToLower()">
+                    <div class="ct-notification-title">@n.Title</div>
+                    <div class="ct-notification-msg">@n.Message</div>
+                    <div class="ct-notification-time">@n.CreatedAt.ToString("g")</div>
+                </li>
+            }
+        </ul>
+    }
+    else
+    {
+        <div class="ct-empty-state">No active alerts</div>
+    }
+</div>
+
+@code {
+    private List<NotificationItem>? _notifications;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        Hub.AlertReceived += async _ =>
+        {
+            await LoadAsync();
+            await InvokeAsync(StateHasChanged);
+        };
+    }
+
+    private async Task LoadAsync()
+    {
+        _notifications = await Api.GetAsync<List<NotificationItem>>("api/v1/alerts/notifications");
+    }
+
+    record NotificationItem(Guid Id, string Title, string Message, string Severity, DateTime CreatedAt);
+}

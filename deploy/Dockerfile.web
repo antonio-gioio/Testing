@@ -1,0 +1,22 @@
+# Stage 1: Build Blazor WASM
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+COPY ["src/ContainerTracking.Core/ContainerTracking.Core.csproj", "src/ContainerTracking.Core/"]
+COPY ["src/ContainerTracking.Web/ContainerTracking.Web.csproj", "src/ContainerTracking.Web/"]
+RUN dotnet restore "src/ContainerTracking.Web/ContainerTracking.Web.csproj"
+
+COPY . .
+RUN dotnet publish "src/ContainerTracking.Web/ContainerTracking.Web.csproj" \
+    -c Release -o /app/publish --no-restore
+
+# Stage 2: Serve with nginx
+FROM nginx:alpine AS runtime
+COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
+
+COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=5s \
+    CMD wget -q -O- http://localhost/health.txt || exit 1

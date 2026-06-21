@@ -1,0 +1,160 @@
+@page "/containers"
+@inject ApiClient Api
+@inject TrackingHubService Hub
+@inject NavigationManager Nav
+
+<PageTitle>Containers — ContainerTrack</PageTitle>
+
+<div class="ct-page">
+    <div class="ct-page-header">
+        <h1>Containers</h1>
+        <div class="ct-header-actions">
+            <input type="search" placeholder="Search containers..." class="ct-search"
+                   @bind="_search" @bind:event="oninput" @oninput="OnSearch" />
+            <button class="ct-btn ct-btn-primary" @onclick="ShowAddModal">+ Add Container</button>
+            <button class="ct-btn ct-btn-secondary" @onclick="ShowImportModal">📥 Import CSV</button>
+        </div>
+    </div>
+
+    <div class="ct-filters">
+        @foreach (var status in Statuses)
+        {
+            <button class="ct-filter-btn @(_statusFilter == status ? "active" : "")"
+                    @onclick="() => SetStatusFilter(status)">
+                @status
+            </button>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <div class="ct-loading">Loading containers...</div>
+    }
+    else if (_containers?.Any() == true)
+    {
+        <div class="ct-table-wrapper">
+            <table class="ct-table">
+                <thead>
+                    <tr>
+                        <th>Container #</th>
+                        <th>Status</th>
+                        <th>Current Location</th>
+                        <th>ETA</th>
+                        <th>Last Event</th>
+                        <th>Shipment</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _containers)
+                    {
+                        <tr class="ct-row" @onclick="() => ViewContainer(c.Id)">
+                            <td class="ct-mono ct-font-bold">@c.ContainerNumber</td>
+                            <td><span class="ct-badge ct-badge-@c.Status.ToLower()">@c.Status</span></td>
+                            <td>@(c.CurrentLocation ?? "—")</td>
+                            <td>@(c.EtaDestination?.ToString("dd MMM yyyy") ?? "—")</td>
+                            <td>@(c.LastEventAt?.ToString("dd MMM HH:mm") ?? "—")</td>
+                            <td>@(c.ShipmentReference ?? "—")</td>
+                            <td>
+                                <button class="ct-btn-icon" @onclick:stopPropagation="true"
+                                        @onclick="() => ViewContainer(c.Id)" title="View">👁</button>
+                                @if (c.HasPublicLink)
+                                {
+                                    <button class="ct-btn-icon" title="Copy tracking link"
+                                            @onclick:stopPropagation="true">🔗</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="ct-pagination">
+            <button class="ct-btn" disabled="@(_page <= 1)" @onclick="() => LoadPage(_page - 1)">← Prev</button>
+            <span>Page @_page of @_totalPages</span>
+            <button class="ct-btn" disabled="@(_page >= _totalPages)" @onclick="() => LoadPage(_page + 1)">Next →</button>
+        </div>
+    }
+    else
+    {
+        <div class="ct-empty-state">
+            <p>No containers found. Add your first container to start tracking.</p>
+            <button class="ct-btn ct-btn-primary" @onclick="ShowAddModal">Add Container</button>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ContainerItem>? _containers;
+    private bool _loading;
+    private string? _search;
+    private string? _statusFilter;
+    private int _page = 1;
+    private int _totalPages = 1;
+
+    private static readonly string[] Statuses = ["All", "InTransit", "Arrived", "Delayed", "Delivered", "Unknown"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPage(1);
+        Hub.ContainerUpdated += OnContainerUpdated;
+    }
+
+    private async Task LoadPage(int page)
+    {
+        _loading = true;
+        _page = page;
+        try
+        {
+            var url = $"api/v1/containers?page={page}&pageSize=25";
+            if (!string.IsNullOrEmpty(_search)) url += $"&search={Uri.EscapeDataString(_search)}";
+            if (!string.IsNullOrEmpty(_statusFilter) && _statusFilter != "All") url += $"&status={_statusFilter}";
+
+            var result = await Api.GetAsync<PagedContainers>(url);
+            _containers = result?.Items ?? new();
+            _totalPages = result?.TotalPages ?? 1;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnSearch(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString();
+        await LoadPage(1);
+    }
+
+    private async Task SetStatusFilter(string status)
+    {
+        _statusFilter = status == "All" ? null : status;
+        await LoadPage(1);
+    }
+
+    private void ViewContainer(Guid id) => Nav.NavigateTo($"/containers/{id}");
+
+    private void ShowAddModal() { }
+    private void ShowImportModal() { }
+
+    private async void OnContainerUpdated(ContainerTracking.Core.Models.ContainerUpdateMessage msg)
+    {
+        var existing = _containers?.FirstOrDefault(c => c.Id == msg.ContainerId);
+        if (existing != null)
+        {
+            _containers![_containers.IndexOf(existing)] = existing with
+            {
+                Status = msg.Status.ToString(),
+                CurrentLocation = msg.CurrentLocation
+            };
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    record ContainerItem(Guid Id, string ContainerNumber, string Status,
+        string? CurrentLocation, DateTime? EtaDestination, DateTime? LastEventAt,
+        string? ShipmentReference, bool HasPublicLink);
+
+    record PagedContainers(IEnumerable<ContainerItem> Items, int Total, int TotalPages);
+}

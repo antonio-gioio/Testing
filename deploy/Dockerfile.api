@@ -1,0 +1,35 @@
+# Stage 1: Build
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+COPY ["src/ContainerTracking.Core/ContainerTracking.Core.csproj", "src/ContainerTracking.Core/"]
+COPY ["src/ContainerTracking.Infrastructure/ContainerTracking.Infrastructure.csproj", "src/ContainerTracking.Infrastructure/"]
+COPY ["src/ContainerTracking.Api/ContainerTracking.Api.csproj", "src/ContainerTracking.Api/"]
+RUN dotnet restore "src/ContainerTracking.Api/ContainerTracking.Api.csproj"
+
+COPY . .
+RUN dotnet publish "src/ContainerTracking.Api/ContainerTracking.Api.csproj" \
+    -c Release -o /app/publish --no-restore
+
+# Stage 2: Runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+WORKDIR /app
+
+# Install PostGIS client libraries
+RUN apt-get update && apt-get install -y libpq5 && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app/publish .
+
+# Create export storage directory
+RUN mkdir -p /app/exports && chmod 755 /app/exports
+
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV ASPNETCORE_URLS=http://+:8080
+ENV DOTNET_RUNNING_IN_CONTAINER=true
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["dotnet", "ContainerTracking.Api.dll"]

@@ -1,0 +1,73 @@
+@page "/admin/organizations"
+@inject ApiClient Api
+
+<PageTitle>Organizations — Platform Admin</PageTitle>
+
+<div class="ct-page">
+    <div class="ct-page-header">
+        <h1>All Organizations</h1>
+        <input type="search" placeholder="Search..." class="ct-search"
+               @bind="_search" @bind:event="oninput" @oninput="OnSearch" />
+    </div>
+
+    @if (_orgs?.Any() == true)
+    {
+        <table class="ct-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Slug</th>
+                    <th>Tier</th>
+                    <th>Containers</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var org in _orgs)
+                {
+                    <tr>
+                        <td class="ct-font-bold">@org.Name</td>
+                        <td class="ct-mono">@org.Slug</td>
+                        <td><span class="ct-badge">@(org.TierName ?? "Free")</span></td>
+                        <td>@(org.ActiveContainers?.ToString() ?? "—")</td>
+                        <td><span class="ct-badge @(org.IsActive ? "ct-badge-active" : "ct-badge-inactive")">
+                            @(org.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>
+                            <button class="ct-btn-sm">Impersonate</button>
+                            <button class="ct-btn-sm ct-btn-danger">Suspend</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="ct-loading">Loading organizations...</div>
+    }
+</div>
+
+@code {
+    private List<OrgItem>? _orgs;
+    private string? _search;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var url = "api/v1/organizations";
+        if (!string.IsNullOrEmpty(_search)) url += $"?search={Uri.EscapeDataString(_search)}";
+        var result = await Api.GetAsync<PagedOrgs>(url);
+        _orgs = result?.Items ?? new();
+    }
+
+    private async Task OnSearch(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString();
+        await LoadAsync();
+    }
+
+    record OrgItem(Guid Id, string Name, string Slug, bool IsActive, string? TierName, int? ActiveContainers);
+    record PagedOrgs(List<OrgItem> Items, int Total);
+}

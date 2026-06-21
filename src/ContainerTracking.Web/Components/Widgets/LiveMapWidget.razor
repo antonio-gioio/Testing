@@ -1,0 +1,48 @@
+@inject ApiClient Api
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div id="ct-map" style="height:400px;width:100%;border-radius:0.5rem;"></div>
+
+@code {
+    private DotNetObjectReference<LiveMapWidget>? _ref;
+    private List<MapPoint>? _containers;
+    private List<VesselPoint>? _vessels;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ref = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("ctMap.init", "ct-map", _ref);
+            await LoadMapDataAsync();
+        }
+    }
+
+    private async Task LoadMapDataAsync()
+    {
+        var data = await Api.GetAsync<MapData>("api/v1/dashboard/map-data");
+        if (data != null)
+        {
+            _containers = data.Containers;
+            _vessels = data.Vessels;
+            await JS.InvokeVoidAsync("ctMap.updateMarkers", _containers, _vessels);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnMapBoundsChanged(double minLat, double minLon, double maxLat, double maxLon)
+    {
+        await LoadMapDataAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await JS.InvokeVoidAsync("ctMap.destroy", "ct-map");
+        _ref?.Dispose();
+    }
+
+    record MapData(List<MapPoint> Containers, List<VesselPoint> Vessels);
+    record MapPoint(Guid Id, string ContainerNumber, string Status, double Latitude, double Longitude, string? Location);
+    record VesselPoint(string Imo, string? Name, double Latitude, double Longitude, double? Speed, double? Heading);
+}

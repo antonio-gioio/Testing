@@ -1,0 +1,68 @@
+@using ContainerTracking.Core.Models
+
+<nav class="ct-nav">
+    <ul>
+        <li>
+            <NavLink href="/" Match="NavLinkMatch.All" class="ct-nav-link">
+                <span class="ct-nav-icon">📊</span>
+                <span>Dashboard</span>
+            </NavLink>
+        </li>
+        <li>
+            <NavLink href="/containers" class="ct-nav-link">
+                <span class="ct-nav-icon">📦</span>
+                <span>Containers</span>
+            </NavLink>
+        </li>
+        <li>
+            <NavLink href="/shipments" class="ct-nav-link">
+                <span class="ct-nav-icon">🚢</span>
+                <span>Shipments</span>
+            </NavLink>
+        </li>
+        <li>
+            <NavLink href="/map" class="ct-nav-link">
+                <span class="ct-nav-icon">🗺️</span>
+                <span>Live Map</span>
+            </NavLink>
+        </li>
+        <li>
+            <NavLink href="/alerts" class="ct-nav-link">
+                <span class="ct-nav-icon">🔔</span>
+                <span>Alerts</span>
+            </NavLink>
+        </li>
+        <li>
+            <NavLink href="/exports" class="ct-nav-link">
+                <span class="ct-nav-icon">📥</span>
+                <span>Exports</span>
+            </NavLink>
+        </li>
+        <li>
+            <NavLink href="/settings" class="ct-nav-link">
+                <span class="ct-nav-icon">⚙️</span>
+                <span>Settings</span>
+            </NavLink>
+        </li>
+    </ul>
+
+    <div class="ct-nav-admin">
+        <NavLink href="/admin" class="ct-nav-link ct-nav-admin-link">
+            <span class="ct-nav-icon">🛡️</span>
+            <span>Admin</span>
+        </NavLink>
+    </div>
+</nav>
+
+<style>
+    .ct-nav { display: flex; flex-direction: column; height: 100%; padding: 1rem 0; }
+    .ct-nav ul { list-style: none; margin: 0; padding: 0; flex: 1; }
+    .ct-nav li { margin: 0.25rem 0; }
+    .ct-nav-link { display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 1.25rem;
+                   color: #94a3b8; text-decoration: none; border-radius: 0.375rem;
+                   transition: all 0.15s; font-weight: 500; }
+    .ct-nav-link:hover, .ct-nav-link.active { background: rgba(99,102,241,0.15); color: #818cf8; }
+    .ct-nav-icon { font-size: 1.1rem; width: 1.5rem; }
+    .ct-nav-admin { margin-top: auto; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); }
+    .ct-nav-admin-link { color: #f59e0b !important; }
+</style>

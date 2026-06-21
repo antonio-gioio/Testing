@@ -1,0 +1,128 @@
+@page "/"
+@page "/dashboard"
+@inject ApiClient Api
+@inject TrackingHubService Hub
+
+<PageTitle>Dashboard — ContainerTrack</PageTitle>
+
+<div class="ct-dashboard">
+    @if (_loading)
+    {
+        <div class="ct-loading">Loading dashboard...</div>
+    }
+    else
+    {
+        <div class="ct-kpi-row">
+            <KpiCard Title="Total Containers" Value="@_summary?.Containers.Total.ToString()" Color="#6366f1" Icon="📦" />
+            <KpiCard Title="In Transit" Value="@_summary?.Containers.InTransit.ToString()" Color="#0ea5e9" Icon="🚢" />
+            <KpiCard Title="Arrived" Value="@_summary?.Containers.Arrived.ToString()" Color="#10b981" Icon="✅" />
+            <KpiCard Title="Delayed" Value="@_summary?.Containers.Delayed.ToString()" Color="#ef4444" Icon="⚠️" />
+            <KpiCard Title="Events (24h)" Value="@_summary?.RecentEventsLast24h.ToString()" Color="#f59e0b" Icon="📡" />
+        </div>
+
+        <div class="ct-widget-grid">
+            @foreach (var widget in _widgets)
+            {
+                <div class="ct-widget @($"ct-widget-{widget.Width}")" style="grid-row: span @widget.Height">
+                    <div class="ct-widget-header">
+                        <span class="ct-widget-title">@widget.Title</span>
+                        <button class="ct-widget-refresh" @onclick="() => RefreshWidget(widget)">↻</button>
+                    </div>
+                    <div class="ct-widget-body">
+                        @switch (widget.WidgetType)
+                        {
+                            case WidgetType.LiveMap:
+                                <LiveMapWidget />
+                                break;
+                            case WidgetType.ContainerStatusCards:
+                                <ContainerStatusWidget OrganizationId="_orgId" />
+                                break;
+                            case WidgetType.ShipmentTimeline:
+                                <ShipmentTimelineWidget />
+                                break;
+                            case WidgetType.ExceptionAlerts:
+                                <AlertPanelWidget />
+                                break;
+                            case WidgetType.TierUsage:
+                                <TierUsageWidget Usage="@_summary?.TierUsage" />
+                                break;
+                            case WidgetType.RecentTrackingEvents:
+                                <RecentEventsWidget />
+                                break;
+                            default:
+                                <div class="ct-widget-placeholder">@widget.WidgetType</div>
+                                break;
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private DashboardSummary? _summary;
+    private List<WidgetDef> _widgets = new();
+    private Guid _orgId;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardAsync();
+        Hub.ContainerUpdated += OnContainerUpdated;
+        Hub.AlertReceived += OnAlertReceived;
+    }
+
+    private async Task LoadDashboardAsync()
+    {
+        _loading = true;
+        try
+        {
+            _summary = await Api.GetAsync<DashboardSummary>("api/v1/dashboard/summary");
+            var layouts = await Api.GetAsync<List<DashboardLayoutDto>>("api/v1/dashboard/layouts");
+            var layout = layouts?.FirstOrDefault();
+            _widgets = layout?.Widgets ?? GetDefaultWidgets();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnContainerUpdated(ContainerTracking.Core.Models.ContainerUpdateMessage msg)
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnAlertReceived(ContainerTracking.Core.Models.AlertNotificationMessage alert)
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshWidget(WidgetDef widget) => await LoadDashboardAsync();
+
+    private List<WidgetDef> GetDefaultWidgets() => new()
+    {
+        new WidgetDef(WidgetType.LiveMap, "Live Map", 8, 2),
+        new WidgetDef(WidgetType.TierUsage, "Plan Usage", 4, 1),
+        new WidgetDef(WidgetType.ContainerStatusCards, "Container Status", 4, 2),
+        new WidgetDef(WidgetType.ExceptionAlerts, "Active Alerts", 4, 1),
+        new WidgetDef(WidgetType.RecentTrackingEvents, "Recent Events", 6, 2),
+        new WidgetDef(WidgetType.ShipmentTimeline, "Shipment Timeline", 6, 2),
+    };
+
+    public enum WidgetType
+    {
+        LiveMap, ContainerStatusCards, ShipmentTimeline, ExceptionAlerts,
+        TierUsage, RecentTrackingEvents, DelayedShipments
+    }
+
+    record WidgetDef(WidgetType WidgetType, string Title, int Width, int Height);
+    record DashboardLayoutDto(Guid Id, string Name, List<WidgetDef> Widgets);
+
+    record DashboardSummary(
+        ContainerStats Containers, int RecentEventsLast24h,
+        ContainerTracking.Core.Models.TierUsageSummary TierUsage);
+
+    record ContainerStats(int Total, int InTransit, int Arrived, int Delayed);
+}

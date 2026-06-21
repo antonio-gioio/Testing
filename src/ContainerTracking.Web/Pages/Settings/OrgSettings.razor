@@ -1,0 +1,89 @@
+@page "/settings"
+@inject ApiClient Api
+
+<PageTitle>Organization Settings</PageTitle>
+
+<div class="ct-page ct-settings">
+    <h1>Organization Settings</h1>
+
+    <div class="ct-settings-sections">
+        <section class="ct-settings-section">
+            <h2>General</h2>
+            <form @onsubmit="SaveSettings">
+                <div class="ct-form-group">
+                    <label>Organization Name</label>
+                    <input type="text" class="ct-input" @bind="_name" />
+                </div>
+                <div class="ct-form-group">
+                    <label>Contact Email</label>
+                    <input type="email" class="ct-input" @bind="_email" />
+                </div>
+                <div class="ct-form-group">
+                    <label>Website</label>
+                    <input type="url" class="ct-input" @bind="_website" />
+                </div>
+                <div class="ct-form-group">
+                    <label>Brand Color</label>
+                    <input type="color" @bind="_primaryColor" />
+                </div>
+                <button type="submit" class="ct-btn ct-btn-primary">Save Changes</button>
+            </form>
+        </section>
+
+        <section class="ct-settings-section">
+            <h2>Subscription & Usage</h2>
+            @if (_tierUsage != null)
+            {
+                <TierUsageWidget Usage="@_tierUsage" />
+                <a href="/settings/upgrade" class="ct-btn ct-btn-primary" style="margin-top:1rem">Upgrade Plan</a>
+            }
+        </section>
+
+        <section class="ct-settings-section">
+            <h2>API Keys</h2>
+            <p>Manage API keys for third-party integrations.</p>
+            <a href="/settings/api-keys" class="ct-btn ct-btn-secondary">Manage API Keys</a>
+        </section>
+
+        <section class="ct-settings-section">
+            <h2>Tracking Providers</h2>
+            <p>Configure tracking provider credentials (Maersk, AIS, etc.).</p>
+            <a href="/settings/providers" class="ct-btn ct-btn-secondary">Configure Providers</a>
+        </section>
+    </div>
+
+    @if (_saved)
+    {
+        <div class="ct-toast ct-toast-success">Settings saved.</div>
+    }
+</div>
+
+@code {
+    private string? _name, _email, _website, _primaryColor;
+    private ContainerTracking.Core.Models.TierUsageSummary? _tierUsage;
+    private bool _saved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var org = await Api.GetAsync<OrgDetails>("api/v1/organizations/mine");
+        if (org != null)
+        {
+            _name = org.Name; _email = org.ContactEmail;
+            _website = org.WebsiteUrl; _primaryColor = org.PrimaryColor;
+        }
+        var tier = await Api.GetAsync<TierResponse>("api/v1/organizations/mine/tier");
+        _tierUsage = tier?.Usage;
+    }
+
+    private async Task SaveSettings()
+    {
+        await Api.PutAsync("api/v1/organizations/mine",
+            new { name = _name, contactEmail = _email, websiteUrl = _website, primaryColor = _primaryColor });
+        _saved = true;
+        await Task.Delay(3000);
+        _saved = false;
+    }
+
+    record OrgDetails(Guid Id, string Name, string? ContactEmail, string? WebsiteUrl, string? PrimaryColor);
+    record TierResponse(ContainerTracking.Core.Models.TierUsageSummary Usage, ContainerTracking.Core.Models.TierLimits Limits);
+}

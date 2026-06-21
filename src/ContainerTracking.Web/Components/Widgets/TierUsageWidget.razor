@@ -1,0 +1,25 @@
+@using ContainerTracking.Core.Models
+
+<div class="ct-tier-usage">
+    @if (Usage != null)
+    {
+        <div class="ct-tier-name">@Usage.TierName Plan</div>
+
+        <UsageBar Label="Containers" Used="@Usage.Containers" Max="@Usage.MaxContainers" Color="#6366f1" />
+        <UsageBar Label="Users" Used="@Usage.Users" Max="@Usage.MaxUsers" Color="#0ea5e9" />
+        <UsageBar Label="Alerts" Used="@Usage.Alerts" Max="@Usage.MaxAlerts" Color="#f59e0b" />
+        <UsageBar Label="API/hr" Used="@Usage.ApiCallsThisHour" Max="@Usage.ApiRateLimitPerHour" Color="#10b981" />
+
+        @if (Usage.ContainerUsagePercent >= 90)
+        {
+            <div class="ct-tier-warning">
+                ⚠️ Approaching container limit.
+                <a href="/settings/tier">Upgrade plan</a>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public TierUsageSummary? Usage { get; set; }
+}

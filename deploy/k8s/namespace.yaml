@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: container-tracking
+  labels:
+    app.kubernetes.io/name: container-tracking
+    app.kubernetes.io/part-of: ct-platform

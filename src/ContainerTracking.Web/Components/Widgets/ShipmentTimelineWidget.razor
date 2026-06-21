@@ -1,0 +1,45 @@
+@inject ApiClient Api
+
+<div class="ct-timeline">
+    @if (_shipments?.Any() == true)
+    {
+        @foreach (var shipment in _shipments)
+        {
+            <div class="ct-timeline-item">
+                <div class="ct-timeline-dot ct-status-@shipment.Status.ToLower()"></div>
+                <div class="ct-timeline-content">
+                    <div class="ct-timeline-ref">@shipment.Reference</div>
+                    <div class="ct-timeline-route">@shipment.OriginPort → @shipment.DestinationPort</div>
+                    <div class="ct-timeline-meta">
+                        <span class="ct-badge ct-badge-@shipment.Status.ToLower()">@shipment.Status</span>
+                        @if (shipment.EstimatedArrival.HasValue)
+                        {
+                            <span class="ct-eta">ETA @shipment.EstimatedArrival.Value.ToString("dd MMM")</span>
+                        }
+                        <span class="ct-container-count">@shipment.ContainerCount containers</span>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="ct-empty-state">No active shipments</div>
+    }
+</div>
+
+@code {
+    private List<ShipmentItem>? _shipments;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Api.GetAsync<PagedResult>("api/v1/shipments?pageSize=5");
+        _shipments = result?.Items;
+    }
+
+    record ShipmentItem(Guid Id, string Reference, string Status,
+        string? OriginPort, string? DestinationPort,
+        DateTime? EstimatedArrival, int ContainerCount);
+
+    record PagedResult(List<ShipmentItem> Items, int Total);
+}
