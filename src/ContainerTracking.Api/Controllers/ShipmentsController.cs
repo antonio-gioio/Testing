@@ -171,6 +171,26 @@ public class ShipmentsController : ControllerBase
         return Ok(new { imported, message = $"Imported {imported} containers." });
     }
 
+    [HttpGet("{id:guid}/containers")]
+    public async Task<IActionResult> GetContainers(Guid id, CancellationToken ct = default)
+    {
+        var orgId = GetOrgId();
+        var exists = await _db.Shipments.AnyAsync(s => s.Id == id && s.OrganizationId == orgId, ct);
+        if (!exists) return NotFound();
+
+        var containers = await _db.Containers
+            .Where(c => c.ShipmentId == id && c.OrganizationId == orgId && !c.IsDeleted)
+            .Select(c => new
+            {
+                c.Id, c.ContainerNumber, Status = c.Status.ToString(),
+                c.SizeType, c.LastEventAt
+            })
+            .OrderBy(c => c.ContainerNumber)
+            .ToListAsync(ct);
+
+        return Ok(containers);
+    }
+
     private Guid GetOrgId()
     {
         var id = _orgContext.OrganizationId;

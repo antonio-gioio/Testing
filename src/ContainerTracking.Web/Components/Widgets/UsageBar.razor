@@ -1,0 +1,28 @@
+@* Single-row usage bar for the tier usage widget *@
+<div class="ct-usage-bar-row">
+    <div class="ct-usage-bar-label">
+        <span>@Label</span>
+        <span class="ct-text-muted">@Used / @(Max < 0 ? "∞" : Max.ToString())</span>
+    </div>
+    @if (Max > 0)
+    {
+        var pct = Math.Min(100, (int)((double)Used / Max * 100));
+        var barColor = pct >= 90 ? "danger" : pct >= 70 ? "warning" : Color;
+        <div class="ct-usage-bar-track">
+            <div class="ct-usage-bar-fill ct-usage-bar-@barColor" style="width:@pct%"></div>
+        </div>
+    }
+    else
+    {
+        <div class="ct-usage-bar-track">
+            <div class="ct-usage-bar-fill ct-usage-bar-@Color" style="width:0%"></div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public int Used { get; set; }
+    [Parameter] public int Max { get; set; }
+    [Parameter] public string Color { get; set; } = "blue";
+}

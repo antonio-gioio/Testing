@@ -1,0 +1,73 @@
+@inject ApiClient Api
+
+<div class="ct-widget ct-widget-events">
+    <div class="ct-widget-header">
+        <h3>Recent Tracking Events</h3>
+        <button class="ct-btn-link" @onclick="LoadEvents">↻</button>
+    </div>
+    @if (_loading)
+    {
+        <div class="ct-loading">Loading...</div>
+    }
+    else if (_events?.Any() == true)
+    {
+        <div class="ct-event-timeline">
+            @foreach (var e in _events)
+            {
+                <div class="ct-event-item ct-event-@e.EventType.ToLower().Replace(" ", "-")">
+                    <div class="ct-event-dot"></div>
+                    <div class="ct-event-body">
+                        <div class="ct-event-header">
+                            <span class="ct-font-bold">@e.ContainerNumber</span>
+                            <span class="ct-badge ct-badge-info">@e.EventType</span>
+                        </div>
+                        <div class="ct-event-desc">@e.Description</div>
+                        <div class="ct-event-meta">
+                            <span>@e.Location</span>
+                            <span class="ct-text-muted">@FormatTime(e.OccurredAt)</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="ct-empty-state">No recent events</div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Limit { get; set; } = 15;
+
+    private List<EventItem>? _events;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync() => await LoadEvents();
+
+    private async Task LoadEvents()
+    {
+        _loading = true;
+        _events = await Api.GetAsync<List<EventItem>>($"api/v1/tracking-events?limit={Limit}");
+        _loading = false;
+    }
+
+    private static string FormatTime(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt;
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1) return $"{(int)diff.TotalHours}h ago";
+        return dt.ToString("dd MMM HH:mm");
+    }
+
+    class EventItem
+    {
+        public Guid Id { get; set; }
+        public string ContainerNumber { get; set; } = "";
+        public string EventType { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Location { get; set; } = "";
+        public DateTime OccurredAt { get; set; }
+    }
+}

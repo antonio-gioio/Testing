@@ -1,0 +1,58 @@
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject ILocalStorageService Storage
+
+<div class="ct-user-menu" @onclick="ToggleDropdown">
+    <div class="ct-user-avatar">@_initials</div>
+    <span class="ct-user-name">@_displayName</span>
+    <span class="ct-user-chevron">▾</span>
+
+    @if (_open)
+    {
+        <div class="ct-user-dropdown" @onclick:stopPropagation="true">
+            <div class="ct-user-dropdown-header">
+                <div class="ct-font-bold">@_displayName</div>
+                <div class="ct-text-muted" style="font-size:0.75rem">@_email</div>
+            </div>
+            <div class="ct-user-dropdown-divider"></div>
+            <button class="ct-user-dropdown-item" @onclick="() => Nav.NavigateTo('/settings')">Settings</button>
+            <button class="ct-user-dropdown-item ct-text-danger" @onclick="Logout">Sign Out</button>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _open;
+    private string _displayName = "";
+    private string _initials = "?";
+    private string _email = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var profile = await Api.GetAsync<UserProfile>("api/v1/users/me");
+        if (profile != null)
+        {
+            _displayName = $"{profile.FirstName} {profile.LastName}".Trim();
+            _email = profile.Email;
+            _initials = (profile.FirstName.Length > 0 ? profile.FirstName[0].ToString() : "")
+                      + (profile.LastName.Length > 0 ? profile.LastName[0].ToString() : "");
+            if (string.IsNullOrEmpty(_initials)) _initials = "?";
+        }
+    }
+
+    private void ToggleDropdown() => _open = !_open;
+
+    private async Task Logout()
+    {
+        await Storage.RemoveItemAsync("auth_token");
+        await Storage.RemoveItemAsync("org_id");
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    class UserProfile
+    {
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string Email { get; set; } = "";
+    }
+}

@@ -122,6 +122,12 @@ builder.Services.AddScoped<ISignalRPublisher, SignalRPublisher>();
 
 // ─── Background Workers ────────────────────────────────────────────────────
 builder.Services.AddHostedService<TrackingPollingWorker>();
+builder.Services.AddHostedService<AlertProcessingWorker>();
+
+// ─── Alert & Manual Tracking Services ─────────────────────────────────────
+builder.Services.AddScoped<AlertProcessingService>();
+builder.Services.AddScoped<IManualTrackingProvider, ManualTrackingProvider>();
+builder.Services.AddScoped<IPortMilestoneProvider, PortMilestoneProvider>();
 
 // ─── Redis Cache ───────────────────────────────────────────────────────────
 if (!string.IsNullOrEmpty(redisConn))
@@ -218,6 +224,22 @@ app.MapControllers();
 app.MapHub<TrackingHub>("/hubs/tracking");
 app.MapPrometheusScrapingEndpoint("/metrics");
 app.MapHealthChecks("/health");
+
+// Apply migrations and seed on startup
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var seederLogger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await db.Database.MigrateAsync();
+        await DbSeeder.SeedAsync(db, seederLogger);
+    }
+    catch (Exception ex)
+    {
+        seederLogger.LogError(ex, "Database migration/seed failed");
+    }
+}
 
 app.Run();
 

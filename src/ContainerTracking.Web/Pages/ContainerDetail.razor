@@ -1,0 +1,209 @@
+@page "/containers/{Id:guid}"
+@inject ApiClient Api
+@inject TrackingHubService Hub
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>@(_container?.ContainerNumber ?? "Container") — ContainerTrack</PageTitle>
+
+<div class="ct-page">
+    @if (_loading)
+    {
+        <div class="ct-loading">Loading container...</div>
+    }
+    else if (_container == null)
+    {
+        <div class="ct-empty-state">Container not found. <a href="/containers">Back to list</a></div>
+    }
+    else
+    {
+        <div class="ct-page-header">
+            <div>
+                <a href="/containers" class="ct-back-link">← Containers</a>
+                <h1>@_container.ContainerNumber</h1>
+            </div>
+            <div class="ct-header-actions">
+                <span class="ct-badge ct-badge-@_container.Status.ToLower()">@_container.Status</span>
+                <button class="ct-btn" @onclick="() => _showAddEvent = !_showAddEvent">+ Add Event</button>
+            </div>
+        </div>
+
+        <div class="ct-detail-layout">
+            <div class="ct-detail-main">
+                <section class="ct-card ct-detail-info">
+                    <h2 class="ct-section-title">Details</h2>
+                    <div class="ct-kv-grid">
+                        <div class="ct-kv-row"><span>Size/Type</span><span>@(_container.SizeType ?? "—")</span></div>
+                        <div class="ct-kv-row"><span>Shipment</span>
+                            <span>
+                                @if (_container.ShipmentId.HasValue)
+                                {
+                                    <a href="/shipments/@_container.ShipmentId">@(_container.ShipmentReference ?? _container.ShipmentId.ToString())</a>
+                                }
+                                else { <span>—</span> }
+                            </span>
+                        </div>
+                        <div class="ct-kv-row"><span>Last Polled</span><span>@(_container.LastPolledAt?.ToString("dd MMM HH:mm") ?? "Never")</span></div>
+                        <div class="ct-kv-row"><span>Tracking Active</span><span>@(_container.IsTrackingActive ? "Yes" : "No")</span></div>
+                        @if (_container.PublicTrackingToken != null)
+                        {
+                            <div class="ct-kv-row">
+                                <span>Public Link</span>
+                                <span><a href="/track/@_container.PublicTrackingToken" target="_blank">Share Link</a></span>
+                            </div>
+                        }
+                    </div>
+                </section>
+
+                @if (_showAddEvent)
+                {
+                    <section class="ct-card">
+                        <h2 class="ct-section-title">Add Manual Event</h2>
+                        <div class="ct-form-row">
+                            <div class="ct-form-group">
+                                <label>Event Type</label>
+                                <select class="ct-input" @bind="_eventForm.EventType">
+                                    <option value="ManualUpdate">Manual Update</option>
+                                    <option value="Loaded">Loaded</option>
+                                    <option value="Discharged">Discharged</option>
+                                    <option value="GateIn">Gate In</option>
+                                    <option value="GateOut">Gate Out</option>
+                                    <option value="CustomsCleared">Customs Cleared</option>
+                                    <option value="Delivered">Delivered</option>
+                                </select>
+                            </div>
+                            <div class="ct-form-group">
+                                <label>Location</label>
+                                <input class="ct-input" @bind="_eventForm.Location" placeholder="Port of Rotterdam" />
+                            </div>
+                        </div>
+                        <div class="ct-form-group">
+                            <label>Description</label>
+                            <input class="ct-input" @bind="_eventForm.Description" placeholder="Additional details..." />
+                        </div>
+                        <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+                            <button class="ct-btn ct-btn-primary" @onclick="AddEvent">Add Event</button>
+                            <button class="ct-btn" @onclick="() => _showAddEvent = false">Cancel</button>
+                        </div>
+                    </section>
+                }
+
+                <section class="ct-card">
+                    <h2 class="ct-section-title">Tracking Timeline</h2>
+                    @if (_events?.Any() == true)
+                    {
+                        <div class="ct-event-timeline">
+                            @foreach (var e in _events)
+                            {
+                                <div class="ct-event-item">
+                                    <div class="ct-event-dot"></div>
+                                    <div class="ct-event-body">
+                                        <div class="ct-event-header">
+                                            <span class="ct-font-bold">@e.EventType</span>
+                                            <span class="ct-text-muted" style="font-size:0.75rem">@e.ProviderType</span>
+                                        </div>
+                                        <div class="ct-event-desc">@e.Description</div>
+                                        <div class="ct-event-meta">
+                                            <span>@e.Location</span>
+                                            <span class="ct-text-muted">@e.OccurredAt.ToString("dd MMM yyyy HH:mm")</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="ct-empty-state">No tracking events yet</div>
+                    }
+                </section>
+            </div>
+
+            <div class="ct-detail-sidebar">
+                @if (_container.Latitude.HasValue && _container.Longitude.HasValue)
+                {
+                    <section class="ct-card">
+                        <h2 class="ct-section-title">Last Known Position</h2>
+                        <div id="container-map" class="ct-map-container" style="height:220px;border-radius:8px"></div>
+                    </section>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ContainerDetail? _container;
+    private List<EventItem>? _events;
+    private bool _loading = true;
+    private bool _showAddEvent;
+    private readonly ManualEventForm _eventForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadContainer(), LoadEvents());
+        Hub.ContainerUpdated += async msg => { await LoadContainer(); await InvokeAsync(StateHasChanged); };
+    }
+
+    private async Task LoadContainer()
+    {
+        _container = await Api.GetAsync<ContainerDetail>($"api/v1/containers/{Id}");
+        _loading = false;
+    }
+
+    private async Task LoadEvents()
+    {
+        _events = await Api.GetAsync<List<EventItem>>($"api/v1/containers/{Id}/events");
+    }
+
+    private async Task AddEvent()
+    {
+        var response = await Api.PostAsync($"api/v1/containers/{Id}/events", new
+        {
+            eventType = _eventForm.EventType,
+            description = _eventForm.Description,
+            location = _eventForm.Location
+        });
+        if (response.IsSuccessStatusCode)
+        {
+            _showAddEvent = false;
+            _eventForm.Description = "";
+            _eventForm.Location = "";
+            await LoadEvents();
+        }
+    }
+
+    public void Dispose() { }
+
+    class ContainerDetail
+    {
+        public Guid Id { get; set; }
+        public string ContainerNumber { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string? SizeType { get; set; }
+        public Guid? ShipmentId { get; set; }
+        public string? ShipmentReference { get; set; }
+        public DateTime? LastPolledAt { get; set; }
+        public bool IsTrackingActive { get; set; }
+        public string? PublicTrackingToken { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+    }
+    class EventItem
+    {
+        public Guid Id { get; set; }
+        public string EventType { get; set; } = "";
+        public string ProviderType { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Location { get; set; } = "";
+        public DateTime OccurredAt { get; set; }
+    }
+    class ManualEventForm
+    {
+        public string EventType { get; set; } = "ManualUpdate";
+        public string Description { get; set; } = "";
+        public string Location { get; set; } = "";
+    }
+}

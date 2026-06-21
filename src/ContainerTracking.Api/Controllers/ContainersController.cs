@@ -198,6 +198,57 @@ public class ContainersController : ControllerBase
         });
     }
 
+    [HttpGet("{id:guid}/map-summary")]
+    public async Task<IActionResult> GetMapSummary(Guid id, CancellationToken ct = default)
+    {
+        var orgId = RequireOrgId();
+        var container = await _db.Containers
+            .Include(c => c.Shipment)
+            .FirstOrDefaultAsync(c => c.Id == id && c.OrganizationId == orgId && !c.IsDeleted, ct);
+        if (container == null) return NotFound();
+
+        return Ok(new
+        {
+            container.Id, container.ContainerNumber,
+            Status = container.Status.ToString(),
+            ShipmentReference = container.Shipment?.Reference,
+            container.LastEventAt,
+            Latitude = container.CurrentPosition?.Y,
+            Longitude = container.CurrentPosition?.X
+        });
+    }
+
+    [HttpPost("{id:guid}/events")]
+    [Authorize(Policy = "RequireLogisticsManager")]
+    public async Task<IActionResult> AddManualEvent(Guid id, [FromBody] ManualEventRequest req, CancellationToken ct = default)
+    {
+        var orgId = RequireOrgId();
+        var container = await _db.Containers.FirstOrDefaultAsync(c => c.Id == id && c.OrganizationId == orgId && !c.IsDeleted, ct);
+        if (container == null) return NotFound();
+
+        if (!Enum.TryParse<Core.Enums.TrackingEventType>(req.EventType, out var eventType))
+            return BadRequest(new { error = "Invalid eventType value." });
+
+        var evt = new TrackingEvent
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = orgId,
+            ContainerId = id,
+            EventType = eventType,
+            ProviderType = Core.Enums.TrackingProviderType.Manual,
+            Description = req.Description ?? eventType.ToString(),
+            Location = req.Location,
+            EventTime = req.EventTime ?? DateTime.UtcNow,
+            ReceivedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _db.TrackingEvents.Add(evt);
+        container.LastEventAt = evt.EventTime;
+        await _db.SaveChangesAsync(ct);
+        return Created($"/api/v1/tracking-events/{evt.Id}", new { evt.Id });
+    }
+
     private Guid RequireOrgId()
     {
         var id = _orgContext.OrganizationId;
@@ -248,6 +299,8 @@ public record CreateContainerRequest(
 
 public record UpdateContainerRequest(
     string? SizeType, string? CargoDescription, Guid? ShipmentId, bool? IsTrackingActive);
+
+public record ManualEventRequest(string EventType, string? Description, string? Location, DateTime? EventTime);
 
 public record PagedResult<T>(IEnumerable<T> Items, int Total, int Page, int PageSize)
 {

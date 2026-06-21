@@ -1,0 +1,108 @@
+@inject ApiClient Api
+@inject TrackingHubService Hub
+@implements IDisposable
+
+<div class="ct-notification-bell" @onclick="ToggleDropdown">
+    <span class="ct-bell-icon">🔔</span>
+    @if (_unreadCount > 0)
+    {
+        <span class="ct-bell-badge">@(_unreadCount > 99 ? "99+" : _unreadCount.ToString())</span>
+    }
+
+    @if (_open)
+    {
+        <div class="ct-bell-dropdown" @onclick:stopPropagation="true">
+            <div class="ct-bell-dropdown-header">
+                <span>Notifications</span>
+                @if (_unreadCount > 0)
+                {
+                    <button class="ct-btn-link" @onclick="MarkAllRead">Mark all read</button>
+                }
+            </div>
+            @if (_notifications?.Any() == true)
+            {
+                @foreach (var n in _notifications.Take(10))
+                {
+                    <div class="ct-bell-item @(n.ReadAt == null ? "ct-unread" : "")"
+                         @onclick="() => MarkRead(n.Id)">
+                        <span class="ct-bell-item-icon">@GetIcon(n.Severity)</span>
+                        <div class="ct-bell-item-body">
+                            <div class="ct-bell-item-title">@n.Title</div>
+                            <div class="ct-bell-item-time">@FormatTime(n.CreatedAt)</div>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="ct-bell-empty">No notifications</div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<NotificationItem>? _notifications;
+    private int _unreadCount;
+    private bool _open;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadNotifications();
+        Hub.AlertReceived += OnAlertReceived;
+    }
+
+    private async void OnAlertReceived(object _)
+    {
+        await LoadNotifications();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadNotifications()
+    {
+        _notifications = await Api.GetAsync<List<NotificationItem>>("api/v1/alerts/notifications");
+        _unreadCount = _notifications?.Count(n => n.ReadAt == null) ?? 0;
+    }
+
+    private void ToggleDropdown() => _open = !_open;
+
+    private async Task MarkRead(Guid id)
+    {
+        await Api.PostAsync($"api/v1/alerts/notifications/{id}/read", new { });
+        await LoadNotifications();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task MarkAllRead()
+    {
+        await Api.PostAsync("api/v1/alerts/notifications/read-all", new { });
+        await LoadNotifications();
+        _open = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string GetIcon(string severity) => severity switch
+    {
+        "Critical" => "🔴", "Warning" => "🟡", _ => "🔵"
+    };
+
+    private static string FormatTime(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt;
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1) return $"{(int)diff.TotalHours}h ago";
+        return dt.ToString("dd MMM");
+    }
+
+    public void Dispose() => Hub.AlertReceived -= OnAlertReceived;
+
+    class NotificationItem
+    {
+        public Guid Id { get; set; }
+        public string Title { get; set; } = "";
+        public string Severity { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public DateTime? ReadAt { get; set; }
+    }
+}

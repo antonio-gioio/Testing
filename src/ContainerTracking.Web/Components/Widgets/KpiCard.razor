@@ -1,0 +1,20 @@
+@* KPI summary card used on the dashboard *@
+<div class="ct-kpi-card ct-kpi-@Color">
+    <div class="ct-kpi-icon">@Icon</div>
+    <div class="ct-kpi-body">
+        <div class="ct-kpi-value">@Value</div>
+        <div class="ct-kpi-title">@Title</div>
+        @if (!string.IsNullOrEmpty(Trend))
+        {
+            <div class="ct-kpi-trend">@Trend</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public string Icon { get; set; } = "";
+    [Parameter] public string Color { get; set; } = "blue";
+    [Parameter] public string? Trend { get; set; }
+}

@@ -16,6 +16,7 @@ public class Organization : BaseEntity
     public bool IsActive { get; set; } = true;
     public bool IsWhiteLabel { get; set; } = false;
     public string? CustomDomain { get; set; }
+    public string WebhookIngestToken { get; set; } = Guid.NewGuid().ToString("N");
     public Dictionary<string, string> Metadata { get; set; } = new();
 
     public ICollection<UserOrganization> UserOrganizations { get; set; } = new List<UserOrganization>();

@@ -1,0 +1,230 @@
+@page "/shipments/{Id:guid}"
+@inject ApiClient Api
+@inject TrackingHubService Hub
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>@(_shipment?.Reference ?? "Shipment") — ContainerTrack</PageTitle>
+
+<div class="ct-page">
+    @if (_loading)
+    {
+        <div class="ct-loading">Loading shipment...</div>
+    }
+    else if (_shipment == null)
+    {
+        <div class="ct-empty-state">Shipment not found. <a href="/shipments">Back to list</a></div>
+    }
+    else
+    {
+        <div class="ct-page-header">
+            <div>
+                <a href="/shipments" class="ct-back-link">← Shipments</a>
+                <h1>@_shipment.Reference</h1>
+            </div>
+            <div class="ct-header-actions">
+                <span class="ct-badge ct-badge-@_shipment.Status.ToLower()">@_shipment.Status</span>
+                <button class="ct-btn" @onclick="() => _showAddContainer = !_showAddContainer">+ Add Container</button>
+            </div>
+        </div>
+
+        <div class="ct-detail-layout">
+            <div class="ct-detail-main">
+                <section class="ct-card ct-detail-info">
+                    <h2 class="ct-section-title">Shipment Details</h2>
+                    <div class="ct-kv-grid">
+                        <div class="ct-kv-row"><span>Carrier</span><span>@(_shipment.CarrierName ?? "—")</span></div>
+                        <div class="ct-kv-row"><span>Voyage</span><span>@(_shipment.VoyageNumber ?? "—")</span></div>
+                        <div class="ct-kv-row">
+                            <span>Route</span>
+                            <span>@(_shipment.OriginPort ?? "—") → @(_shipment.DestinationPort ?? "—")</span>
+                        </div>
+                        <div class="ct-kv-row"><span>ETD</span><span>@(_shipment.EstimatedDeparture?.ToString("dd MMM yyyy") ?? "—")</span></div>
+                        <div class="ct-kv-row"><span>ETA</span><span>@(_shipment.EstimatedArrival?.ToString("dd MMM yyyy") ?? "—")</span></div>
+                        @if (_shipment.IsDelayDetected)
+                        {
+                            <div class="ct-kv-row"><span>Delay</span><span class="ct-text-danger">⚠ Delay Detected</span></div>
+                        }
+                        @if (!string.IsNullOrEmpty(_shipment.Description))
+                        {
+                            <div class="ct-kv-row ct-kv-full"><span>Notes</span><span>@_shipment.Description</span></div>
+                        }
+                    </div>
+                </section>
+
+                @if (_showAddContainer)
+                {
+                    <section class="ct-card">
+                        <h2 class="ct-section-title">Add Container</h2>
+                        <div class="ct-form-row">
+                            <div class="ct-form-group">
+                                <label>Container Number *</label>
+                                <input class="ct-input" @bind="_containerForm.ContainerNumber" placeholder="MSCU1234567" />
+                            </div>
+                            <div class="ct-form-group">
+                                <label>Size/Type</label>
+                                <input class="ct-input" @bind="_containerForm.SizeType" placeholder="40ft Dry" />
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+                            <button class="ct-btn ct-btn-primary" @onclick="AddContainer">Add</button>
+                            <button class="ct-btn" @onclick="() => _showAddContainer = false">Cancel</button>
+                        </div>
+                        @if (_addError != null)
+                        {
+                            <div class="ct-alert ct-alert-error" style="margin-top:0.5rem">@_addError</div>
+                        }
+                    </section>
+                }
+
+                <section class="ct-card">
+                    <h2 class="ct-section-title">Containers (@(_containers?.Count ?? 0))</h2>
+                    @if (_containers?.Any() == true)
+                    {
+                        <table class="ct-table">
+                            <thead>
+                                <tr>
+                                    <th>Container #</th>
+                                    <th>Type</th>
+                                    <th>Size</th>
+                                    <th>Status</th>
+                                    <th>Last Event</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in _containers)
+                                {
+                                    <tr class="ct-row-clickable" @onclick="() => Nav.NavigateTo($'/containers/{c.Id}')">
+                                        <td class="ct-font-mono">@c.ContainerNumber</td>
+                                        <td>—</td>
+                                        <td>@(c.SizeType ?? "—")</td>
+                                        <td><span class="ct-badge ct-badge-@c.Status.ToLower()">@c.Status</span></td>
+                                        <td>@(c.LastEventAt?.ToString("dd MMM HH:mm") ?? "—")</td>
+                                        <td><span class="ct-text-muted">→</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else
+                    {
+                        <div class="ct-empty-state">No containers linked yet</div>
+                    }
+                </section>
+            </div>
+
+            <div class="ct-detail-sidebar">
+                <section class="ct-card">
+                    <h2 class="ct-section-title">Progress</h2>
+                    <div class="ct-shipment-progress">
+                        @{
+                            var stages = new[] { "Draft", "Active", "InTransit", "Arrived", "Delivered" };
+                            var currentIdx = Array.IndexOf(stages, _shipment.Status);
+                        }
+                        @foreach (var (stage, idx) in stages.Select((s, i) => (s, i)))
+                        {
+                            <div class="ct-progress-step @(idx < currentIdx ? "ct-done" : idx == currentIdx ? "ct-current" : "")">
+                                <div class="ct-progress-dot"></div>
+                                <span>@stage</span>
+                            </div>
+                        }
+                    </div>
+                </section>
+
+                @if (_shipment.VesselName != null)
+                {
+                    <section class="ct-card">
+                        <h2 class="ct-section-title">Vessel</h2>
+                        <div class="ct-kv-row"><span>Name</span><span>@_shipment.VesselName</span></div>
+                        @if (_shipment.VesselImo != null)
+                        {
+                            <div class="ct-kv-row"><span>IMO</span><span class="ct-font-mono">@_shipment.VesselImo</span></div>
+                        }
+                    </section>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ShipmentDetail? _shipment;
+    private List<ContainerItem>? _containers;
+    private bool _loading = true;
+    private bool _showAddContainer;
+    private string? _addError;
+    private readonly ContainerAddForm _containerForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadShipment(), LoadContainers());
+    }
+
+    private async Task LoadShipment()
+    {
+        _shipment = await Api.GetAsync<ShipmentDetail>($"api/v1/shipments/{Id}");
+        _loading = false;
+    }
+
+    private async Task LoadContainers()
+    {
+        _containers = await Api.GetAsync<List<ContainerItem>>($"api/v1/shipments/{Id}/containers");
+    }
+
+    private async Task AddContainer()
+    {
+        _addError = null;
+        var response = await Api.PostAsync("api/v1/containers", new
+        {
+            containerNumber = _containerForm.ContainerNumber,
+            sizeType = _containerForm.SizeType,
+            shipmentId = Id
+        });
+        if (response.IsSuccessStatusCode)
+        {
+            _showAddContainer = false;
+            _containerForm.ContainerNumber = "";
+            await LoadContainers();
+        }
+        else
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            _addError = body.Length < 200 ? body : "Failed to add container.";
+        }
+    }
+
+    public void Dispose() { }
+
+    class ShipmentDetail
+    {
+        public Guid Id { get; set; }
+        public string Reference { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string? CarrierName { get; set; }
+        public string? VoyageNumber { get; set; }
+        public string? OriginPort { get; set; }
+        public string? DestinationPort { get; set; }
+        public DateTime? EstimatedDeparture { get; set; }
+        public DateTime? EstimatedArrival { get; set; }
+        public string? Description { get; set; }
+        public bool IsDelayDetected { get; set; }
+        public string? VesselName { get; set; }
+        public string? VesselImo { get; set; }
+    }
+    class ContainerItem
+    {
+        public Guid Id { get; set; }
+        public string ContainerNumber { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string? SizeType { get; set; }
+        public DateTime? LastEventAt { get; set; }
+    }
+    class ContainerAddForm
+    {
+        public string ContainerNumber { get; set; } = "";
+        public string SizeType { get; set; } = "40ft Dry";
+    }
+}

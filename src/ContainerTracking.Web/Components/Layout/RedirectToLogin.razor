@@ -1,0 +1,11 @@
+@inject NavigationManager Nav
+@inject ILocalStorageService Storage
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await Storage.GetItemAsStringAsync("auth_token");
+        if (string.IsNullOrEmpty(token))
+            Nav.NavigateTo("/login", forceLoad: false);
+    }
+}

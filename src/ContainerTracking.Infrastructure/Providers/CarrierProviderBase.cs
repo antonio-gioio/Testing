@@ -219,3 +219,12 @@ public class GenericCarrierProvider : CarrierProviderBase
         return new ProviderHealthResult { IsHealthy = true };
     }
 }
+
+public class MscCarrierProvider(IHttpClientFactory http, ILogger<MscCarrierProvider> logger)
+    : GenericCarrierProvider(http, logger, "msc", "MSC", "MSCU", "https://www.msc.com/api/tracking") { }
+
+public class CmaCgmCarrierProvider(IHttpClientFactory http, ILogger<CmaCgmCarrierProvider> logger)
+    : GenericCarrierProvider(http, logger, "cmacgm", "CMA CGM", "CMAU", "https://apis.cma-cgm.net") { }
+
+public class HapagLloydCarrierProvider(IHttpClientFactory http, ILogger<HapagLloydCarrierProvider> logger)
+    : GenericCarrierProvider(http, logger, "hapag", "Hapag-Lloyd", "HLCU", "https://api.hapag-lloyd.com") { }

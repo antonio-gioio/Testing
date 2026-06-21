@@ -1,0 +1,122 @@
+@page "/map"
+@inject ApiClient Api
+@inject TrackingHubService Hub
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Live Map — ContainerTrack</PageTitle>
+
+<div class="ct-page ct-page-fullscreen">
+    <div class="ct-page-header ct-page-header-slim">
+        <h1>Live Map</h1>
+        <div class="ct-header-actions">
+            <select class="ct-input ct-select" @onchange="OnLayerChange">
+                <option value="all">All</option>
+                <option value="containers">Containers Only</option>
+                <option value="vessels">Vessels Only</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="ct-map-fullscreen">
+        <div id="live-map" class="ct-map-container" style="height:calc(100vh - 120px)"></div>
+    </div>
+
+    <div class="ct-map-legend">
+        <div class="ct-legend-item"><span class="ct-legend-icon">📦</span> Container</div>
+        <div class="ct-legend-item"><span class="ct-legend-icon">🚢</span> Vessel</div>
+    </div>
+
+    @if (_selectedContainer != null)
+    {
+        <div class="ct-map-sidebar">
+            <div class="ct-map-sidebar-header">
+                <span class="ct-font-bold">@_selectedContainer.ContainerNumber</span>
+                <button class="ct-btn-icon" @onclick="() => _selectedContainer = null">✕</button>
+            </div>
+            <div class="ct-map-sidebar-body">
+                <div class="ct-kv-row"><span>Status</span><span class="ct-badge ct-badge-@_selectedContainer.Status.ToLower()">@_selectedContainer.Status</span></div>
+                <div class="ct-kv-row"><span>Shipment</span><span>@(_selectedContainer.ShipmentReference ?? "—")</span></div>
+                @if (_selectedContainer.LastEventAt.HasValue)
+                {
+                    <div class="ct-kv-row"><span>Last Event</span><span>@_selectedContainer.LastEventAt.Value.ToString("dd MMM HH:mm")</span></div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private DotNetObjectReference<Map>? _dotNetRef;
+    private string _layer = "all";
+    private ContainerMapItem? _selectedContainer;
+    private MapData? _mapData;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await LoadMapData();
+        await JS.InvokeVoidAsync("ctMap.init", "live-map", _dotNetRef);
+        await RefreshMarkers();
+        Hub.VesselPositionUpdated += async _ =>
+        {
+            await LoadMapData();
+            await InvokeAsync(async () => { await RefreshMarkers(); StateHasChanged(); });
+        };
+        Hub.ContainerUpdated += async _ =>
+        {
+            await LoadMapData();
+            await InvokeAsync(async () => { await RefreshMarkers(); StateHasChanged(); });
+        };
+    }
+
+    private async Task LoadMapData()
+    {
+        _mapData = await Api.GetAsync<MapData>("api/v1/dashboard/map-data");
+    }
+
+    private async Task RefreshMarkers()
+    {
+        if (_mapData == null) return;
+        var containers = _layer != "vessels" ? _mapData.Containers : new();
+        var vessels = _layer != "containers" ? _mapData.Vessels : new();
+        await JS.InvokeVoidAsync("ctMap.updateMarkers", "live-map", containers, vessels);
+    }
+
+    private async Task OnLayerChange(ChangeEventArgs e)
+    {
+        _layer = e.Value?.ToString() ?? "all";
+        await RefreshMarkers();
+    }
+
+    [JSInvokable]
+    public async Task OnMarkerClick(string type, string id)
+    {
+        if (type == "container" && Guid.TryParse(id, out var containerId))
+        {
+            _selectedContainer = await Api.GetAsync<ContainerMapItem>($"api/v1/containers/{containerId}/map-summary");
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await JS.InvokeVoidAsync("ctMap.destroy", "live-map");
+        _dotNetRef?.Dispose();
+    }
+
+    class MapData
+    {
+        public List<object> Containers { get; set; } = new();
+        public List<object> Vessels { get; set; } = new();
+    }
+    class ContainerMapItem
+    {
+        public Guid Id { get; set; }
+        public string ContainerNumber { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string? ShipmentReference { get; set; }
+        public DateTime? LastEventAt { get; set; }
+    }
+}

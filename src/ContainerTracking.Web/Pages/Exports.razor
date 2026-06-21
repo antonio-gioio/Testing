@@ -1,0 +1,161 @@
+@page "/exports"
+@inject ApiClient Api
+
+<PageTitle>Exports — ContainerTrack</PageTitle>
+
+<div class="ct-page">
+    <div class="ct-page-header">
+        <h1>Data Exports</h1>
+    </div>
+
+    <div class="ct-exports-layout">
+        <section class="ct-export-new">
+            <h2 class="ct-section-title">New Export</h2>
+            <div class="ct-card">
+                <div class="ct-form-row">
+                    <div class="ct-form-group">
+                        <label>Data Type</label>
+                        <select class="ct-input" @bind="_form.DataType">
+                            <option value="Containers">Containers</option>
+                            <option value="Shipments">Shipments</option>
+                            <option value="TrackingEvents">Tracking Events</option>
+                            <option value="BillsOfLading">Bills of Lading</option>
+                            <option value="Alerts">Alerts</option>
+                        </select>
+                    </div>
+                    <div class="ct-form-group">
+                        <label>Format</label>
+                        <select class="ct-input" @bind="_form.Format">
+                            <option value="Csv">CSV</option>
+                            <option value="Excel">Excel (.xlsx)</option>
+                            <option value="Pdf">PDF</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="ct-form-row">
+                    <div class="ct-form-group">
+                        <label>From Date</label>
+                        <input type="date" class="ct-input" @bind="_form.DateFrom" />
+                    </div>
+                    <div class="ct-form-group">
+                        <label>To Date</label>
+                        <input type="date" class="ct-input" @bind="_form.DateTo" />
+                    </div>
+                </div>
+                @if (_exportError != null)
+                {
+                    <div class="ct-alert ct-alert-error">@_exportError</div>
+                }
+                <div style="margin-top:1rem">
+                    <button class="ct-btn ct-btn-primary" @onclick="QueueExport" disabled="@_queuing">
+                        @if (_queuing) { <span class="ct-spinner-sm"></span> }
+                        Queue Export
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section class="ct-export-history">
+            <h2 class="ct-section-title">Export History</h2>
+            @if (_jobs?.Any() == true)
+            {
+                <div class="ct-export-list">
+                    @foreach (var job in _jobs)
+                    {
+                        <div class="ct-export-item">
+                            <div class="ct-export-item-header">
+                                <span>@job.DataType — @job.Format</span>
+                                <span class="ct-badge ct-badge-@StatusBadge(job.Status)">@job.Status</span>
+                            </div>
+                            <div class="ct-export-item-meta">
+                                <span>@job.CreatedAt.ToString("dd MMM yyyy HH:mm")</span>
+                                @if (job.RecordCount.HasValue)
+                                {
+                                    <span>@job.RecordCount records</span>
+                                }
+                                @if (job.Status == "Completed" && job.DownloadUrl != null)
+                                {
+                                    <a class="ct-btn ct-btn-sm" href="@job.DownloadUrl" target="_blank">
+                                        Download (@job.DownloadCount/@job.MaxDownloads)
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="ct-empty-state">No exports yet</div>
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    private List<ExportJob>? _jobs;
+    private readonly ExportForm _form = new();
+    private bool _queuing;
+    private string? _exportError;
+
+    protected override async Task OnInitializedAsync() => await LoadJobs();
+
+    private async Task LoadJobs()
+    {
+        _jobs = await Api.GetAsync<List<ExportJob>>("api/v1/exports");
+    }
+
+    private async Task QueueExport()
+    {
+        _queuing = true;
+        _exportError = null;
+        var response = await Api.PostAsync("api/v1/exports", new
+        {
+            dataType = _form.DataType,
+            format = _form.Format,
+            filters = new
+            {
+                dateFrom = _form.DateFrom,
+                dateTo = _form.DateTo
+            }
+        });
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadJobs();
+        }
+        else
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            _exportError = body.Length < 300 ? body : "Export failed. Please try again.";
+        }
+        _queuing = false;
+    }
+
+    private static string StatusBadge(string status) => status switch
+    {
+        "Completed" => "success",
+        "Failed" => "danger",
+        "Processing" => "warning",
+        _ => "info"
+    };
+
+    class ExportJob
+    {
+        public Guid Id { get; set; }
+        public string DataType { get; set; } = "";
+        public string Format { get; set; } = "";
+        public string Status { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public int? RecordCount { get; set; }
+        public string? DownloadUrl { get; set; }
+        public int DownloadCount { get; set; }
+        public int MaxDownloads { get; set; }
+    }
+    class ExportForm
+    {
+        public string DataType { get; set; } = "Containers";
+        public string Format { get; set; } = "Csv";
+        public DateTime? DateFrom { get; set; }
+        public DateTime? DateTo { get; set; }
+    }
+}
