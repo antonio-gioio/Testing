@@ -209,10 +209,102 @@ body { background: var(--ct-bg); color: var(--ct-text); font-family: 'Inter', sy
 /* ─── Map Popup ──────────────────────────────────────────── */
 .ct-popup { font-family: inherit; font-size: 0.85rem; }
 
+/* ─── Container Detail ───────────────────────────────────── */
+.ct-detail-layout { display: grid; grid-template-columns: 1fr 320px; gap: 1.25rem; align-items: start; }
+.ct-detail-main { display: flex; flex-direction: column; gap: 1.25rem; }
+.ct-detail-sidebar { display: flex; flex-direction: column; gap: 1.25rem; }
+.ct-detail-info { }
+.ct-section-title { font-size: 0.875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ct-text-muted); margin-bottom: 0.85rem; }
+.ct-kv-grid { display: flex; flex-direction: column; gap: 0.5rem; }
+.ct-kv-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; padding: 0.35rem 0; border-bottom: 1px solid var(--ct-border); }
+.ct-kv-row:last-child { border-bottom: none; }
+.ct-kv-row > span:first-child { color: var(--ct-text-muted); }
+.ct-back-link { font-size: 0.8rem; color: var(--ct-text-muted); text-decoration: none; display: block; margin-bottom: 0.25rem; }
+.ct-back-link:hover { color: var(--ct-primary); }
+.ct-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.ct-map-container { width: 100%; }
+.ct-text-muted { color: var(--ct-text-muted); }
+
+/* ─── Event Timeline ─────────────────────────────────────── */
+.ct-event-timeline { display: flex; flex-direction: column; gap: 0; }
+
+.ct-event-item {
+    display: flex; gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--ct-border);
+    transition: background 0.1s;
+}
+.ct-event-item:last-child { border-bottom: none; }
+.ct-event-item:hover { background: rgba(255,255,255,0.02); margin: 0 -1rem; padding-left: 1rem; padding-right: 1rem; }
+
+.ct-event-dot {
+    flex-shrink: 0;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--ct-border);
+    border: 2px solid var(--ct-text-muted);
+    margin-top: 0.35rem;
+}
+
+.ct-event-body { flex: 1; min-width: 0; }
+.ct-event-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem; }
+.ct-event-desc { font-size: 0.82rem; color: var(--ct-text-muted); margin-bottom: 0.3rem; }
+.ct-event-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--ct-text-muted); }
+
+/* Discharge — amber highlight */
+.ct-event-discharge {
+    background: rgba(245,158,11,0.06);
+    border-radius: var(--ct-radius);
+    padding: 0.75rem;
+    margin: 0 -0.75rem;
+    border-bottom: none !important;
+    margin-bottom: 0.25rem;
+}
+.ct-dot-discharge {
+    background: var(--ct-warning);
+    border-color: var(--ct-warning);
+    width: 12px; height: 12px;
+}
+.ct-badge-discharged { background: rgba(245,158,11,0.2); color: var(--ct-warning); font-size: 0.65rem; padding: 0.1rem 0.45rem; }
+
+/* Delivered — green highlight */
+.ct-event-delivered {
+    background: rgba(16,185,129,0.06);
+    border-radius: var(--ct-radius);
+    padding: 0.75rem;
+    margin: 0 -0.75rem;
+    border-bottom: none !important;
+    margin-bottom: 0.25rem;
+}
+.ct-dot-delivered {
+    background: var(--ct-success);
+    border-color: var(--ct-success);
+    width: 12px; height: 12px;
+}
+
+/* Alert / delay / hold — red */
+.ct-event-alert { }
+.ct-dot-alert {
+    background: var(--ct-danger);
+    border-color: var(--ct-danger);
+}
+
+/* Extra status badges */
+.ct-badge-discharged { background: rgba(245,158,11,0.2); color: var(--ct-warning); }
+.ct-badge-gateout    { background: rgba(99,102,241,0.15); color: var(--ct-primary); }
+.ct-badge-held       { background: rgba(239,68,68,0.15); color: var(--ct-danger); }
+.ct-badge-departed   { background: rgba(14,165,233,0.15); color: var(--ct-info); }
+.ct-badge-transshipmentarrived { background: rgba(245,158,11,0.12); color: var(--ct-warning); }
+.ct-badge-loaded     { background: rgba(14,165,233,0.12); color: var(--ct-info); }
+.ct-badge-gatein     { background: rgba(99,102,241,0.12); color: var(--ct-primary); }
+.ct-badge-unknown    { background: rgba(148,163,184,0.12); color: var(--ct-text-muted); }
+
 /* Responsive */
 @media (max-width: 768px) {
     .ct-sidebar { width: 60px; }
     .ct-logo-text, .ct-nav span:not(.ct-nav-icon) { display: none; }
     .ct-widget-4, .ct-widget-6, .ct-widget-8 { grid-column: span 12; }
     .ct-kpi-row { flex-direction: column; }
+    .ct-detail-layout { grid-template-columns: 1fr; }
+    .ct-form-row { grid-template-columns: 1fr; }
 }

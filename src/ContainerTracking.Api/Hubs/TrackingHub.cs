@@ -2,6 +2,7 @@ using ContainerTracking.Core.Enums;
 using ContainerTracking.Core.Interfaces;
 using ContainerTracking.Core.Models;
 using ContainerTracking.Infrastructure.Data;
+using ContainerTracking.Infrastructure.Workers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
