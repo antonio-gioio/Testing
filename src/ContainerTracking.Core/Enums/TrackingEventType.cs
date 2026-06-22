@@ -22,7 +22,8 @@ public enum TrackingEventType
     HoldReleased = 17,
     CustomsCleared = 18,
     ManualUpdate = 19,
-    ImportedEvent = 20
+    ImportedEvent = 20,
+    TerminalAvailable = 21   // Container cleared all holds, grounded, ready for trucker pickup
 }
 
 public enum TrackingProviderType

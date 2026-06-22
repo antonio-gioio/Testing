@@ -104,6 +104,8 @@ builder.Services.AddScoped<ITrackingNormalizer, TrackingNormalizer>();
 // Carrier providers
 builder.Services.AddHttpClient<MaerskCarrierProvider>();
 builder.Services.AddScoped<ITrackingProvider, MaerskCarrierProvider>();
+builder.Services.AddHttpClient<Terminal49Provider>();
+builder.Services.AddScoped<ITrackingProvider, Terminal49Provider>();
 
 // ─── SignalR ───────────────────────────────────────────────────────────────
 var redisConn = builder.Configuration.GetConnectionString("Redis");

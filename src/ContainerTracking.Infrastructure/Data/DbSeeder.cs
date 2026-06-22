@@ -229,6 +229,16 @@ public static class DbSeeder
             },
             new TrackingProvider
             {
+                Id = Guid.NewGuid(), Name = "Terminal49", Code = "TERMINAL49",
+                ProviderType = TrackingProviderType.Carrier,
+                Description = "Terminal49 — terminal availability, holds, and LFD for trucker dispatch",
+                BaseUrl = "https://api.terminal49.com/api/v2",
+                IsEnabled = true, IsGlobal = false, RequiresCredentials = true,
+                PollIntervalMinutes = 30, Priority = 25,
+                CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+            },
+            new TrackingProvider
+            {
                 Id = Guid.NewGuid(), Name = "Manual", Code = "manual",
                 ProviderType = TrackingProviderType.Manual,
                 Description = "Manual event entry by operations staff",

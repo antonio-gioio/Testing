@@ -16,5 +16,6 @@ public enum ContainerStatus
     Delivered = 11,
     Empty = 12,
     Delayed = 13,
-    OnHold = 14
+    OnHold = 14,
+    AvailableForPickup = 15  // All holds released, container grounded — trucker can pick up
 }

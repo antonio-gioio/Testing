@@ -298,6 +298,19 @@ body { background: var(--ct-bg); color: var(--ct-text); font-family: 'Inter', sy
 .ct-badge-loaded     { background: rgba(14,165,233,0.12); color: var(--ct-info); }
 .ct-badge-gatein     { background: rgba(99,102,241,0.12); color: var(--ct-primary); }
 .ct-badge-unknown    { background: rgba(148,163,184,0.12); color: var(--ct-text-muted); }
+.ct-badge-availableforpickup { background: rgba(16,185,129,0.2); color: var(--ct-success); }
+.ct-badge-onhold     { background: rgba(239,68,68,0.15); color: var(--ct-danger); }
+
+/* Available for pickup — bright green highlight */
+.ct-event-available {
+    background: rgba(16,185,129,0.08);
+    border-left: 3px solid var(--ct-success);
+    padding-left: calc(0.75rem - 3px);
+}
+.ct-dot-available {
+    background: var(--ct-success);
+    box-shadow: 0 0 0 3px rgba(16,185,129,0.25);
+}
 
 /* Responsive */
 @media (max-width: 768px) {

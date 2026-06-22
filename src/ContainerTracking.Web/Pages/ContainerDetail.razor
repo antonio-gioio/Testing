@@ -78,6 +78,7 @@
                                     <option value="VesselDeparted">Vessel Departed</option>
                                     <option value="VesselArrived">Vessel Arrived</option>
                                     <option value="ContainerDischarged">Discharged</option>
+                                    <option value="TerminalAvailable">Available for Pickup</option>
                                     <option value="ContainerGateOut">Gate Out</option>
                                     <option value="CustomsCleared">Customs Cleared</option>
                                     <option value="ContainerDelivered">Delivered</option>
@@ -111,14 +112,19 @@
                             {
                                 var isDischarge = e.EventType is "ContainerDischarged";
                                 var isDelivered = e.EventType is "ContainerDelivered";
+                                var isAvailable = e.EventType is "TerminalAvailable";
                                 var isAlert = e.EventType is "DelayNotification" or "HoldPlaced";
-                                <div class="ct-event-item @(isDischarge ? "ct-event-discharge" : isDelivered ? "ct-event-delivered" : isAlert ? "ct-event-alert" : "")">
-                                    <div class="ct-event-dot @(isDischarge ? "ct-dot-discharge" : isDelivered ? "ct-dot-delivered" : isAlert ? "ct-dot-alert" : "")"></div>
+                                <div class="ct-event-item @(isAvailable ? "ct-event-available" : isDischarge ? "ct-event-discharge" : isDelivered ? "ct-event-delivered" : isAlert ? "ct-event-alert" : "")">
+                                    <div class="ct-event-dot @(isAvailable ? "ct-dot-available" : isDischarge ? "ct-dot-discharge" : isDelivered ? "ct-dot-delivered" : isAlert ? "ct-dot-alert" : "")"></div>
                                     <div class="ct-event-body">
                                         <div class="ct-event-header">
                                             <span class="ct-font-bold">
                                                 @EventTypeLabel(e.EventType)
-                                                @if (isDischarge)
+                                                @if (isAvailable)
+                                                {
+                                                    <span class="ct-badge ct-badge-availableforpickup" style="margin-left:0.5rem;font-size:0.7rem">READY FOR PICKUP</span>
+                                                }
+                                                else if (isDischarge)
                                                 {
                                                     <span class="ct-badge ct-badge-discharged" style="margin-left:0.5rem;font-size:0.7rem">DISCHARGED</span>
                                                 }
@@ -247,6 +253,7 @@
         "TransshipmentDeparted" => "Transshipment Departed",
         "VesselArrived" => "Vessel Arrived at Port",
         "ContainerDischarged" => "Container Discharged",
+        "TerminalAvailable" => "Available for Pickup",
         "ContainerGateOut" => "Gate Out",
         "ContainerDelivered" => "Delivered",
         "AisPositionUpdate" => "AIS Position Update",

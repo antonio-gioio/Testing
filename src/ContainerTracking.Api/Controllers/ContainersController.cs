@@ -301,12 +301,14 @@ public class ContainersController : ControllerBase
         TrackingEventType.VesselDeparted => ContainerStatus.Departed,
         TrackingEventType.VesselArrived => ContainerStatus.Arrived,
         TrackingEventType.ContainerDischarged => ContainerStatus.Discharged,
+        TrackingEventType.TerminalAvailable => ContainerStatus.AvailableForPickup,
         TrackingEventType.ContainerGateOut => ContainerStatus.GateOut,
         TrackingEventType.ContainerDelivered => ContainerStatus.Delivered,
         TrackingEventType.TransshipmentArrived => ContainerStatus.TransshipmentArrived,
         TrackingEventType.TransshipmentDeparted => ContainerStatus.TransshipmentDeparted,
         TrackingEventType.BookingConfirmed => ContainerStatus.BookingConfirmed,
         TrackingEventType.EmptyReturned => ContainerStatus.Empty,
+        TrackingEventType.HoldPlaced => ContainerStatus.OnHold,
         _ => null
     };
 
